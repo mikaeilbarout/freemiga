@@ -72,9 +72,33 @@ USDT (شبکه ترون یا پالیگان) می‌فرسته، سیستم خو
 - یه دامنه/ساب‌دامین (مثلاً `freemiga.com`) که رکورد A‌ش به IP سرور اشاره کنه
 - پورت‌های ۸۰ و ۴۴۳ سرور باز باشن
 
-### ۱. آپلود پروژه و تنظیم `.env`
+### ۱. کلون کردن پروژه و تنظیم `.env`
+
+کد رو تو گیت‌هاب نگه می‌داریم: [github.com/mikaeilbarout/freemiga](https://github.com/mikaeilbarout/freemiga)
+(ریپو خصوصیه). رو سرور، به‌جای آپلود دستی فایل‌ها، مستقیم کلون کن:
+
 ```bash
-cd /opt/freemiga  # یا هر مسیر دیگه
+git clone git@github.com:mikaeilbarout/freemiga.git /opt/freemiga
+cd /opt/freemiga
+```
+
+چون ریپو خصوصیه، سرور به یه **Deploy Key** نیاز داره (یه کلید SSH فقط-خواندنی
+مخصوص همین ریپو — نه پسورد یا access token شخصی):
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/github_deploy -N "" -C "your-server-deploy"
+cat ~/.ssh/github_deploy.pub   # این رو تو GitHub → Settings → Deploy keys → Add deploy key اضافه کن (Read-only)
+```
+بعدش تو `~/.ssh/config` این رو اضافه کن تا git خودش از این کلید استفاده کنه:
+```
+Host github.com
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/github_deploy
+  IdentitiesOnly yes
+```
+
+بعد `.env` رو بساز:
+```bash
 cp .env.example .env
 python3 -c "import secrets; print(secrets.token_hex(32))"   # → SESSION_SECRET
 python3 -c "import secrets; print(secrets.token_urlsafe(24))"   # → POSTGRES_PASSWORD
@@ -87,6 +111,23 @@ nano .env
 و بدون nginx/TLS رو پورت ۸۰۰۲ باز می‌کنه) — قبل از اجرا رو سرور پروداکشن حتماً
 حذفش کن، وگرنه هرکسی می‌تونه مستقیم به اپ وصل بشه و هدرهای
 `X-Forwarded-For`/`X-Real-IP` رو جعل کنه.
+
+**اگه سرور از قبل یه nginx دیگه داره** (مثلاً یه سایت دیگه‌ی همین صاحب سرور رو
+پورت ۸۰/۴۴۳ نشسته — دقیقاً وضعیت `freemiga.com` روی سرور فعلی، که کنار
+`persepolisconstruction.co.uk` هاست می‌شه): مراحل بالا (nginx/certbot خودِ این
+پروژه) رو اجرا نکن. به‌جاش:
+1. فقط `docker compose up -d db app` رو بزن (نه nginx/certbot این پروژه)
+2. یه `docker-compose.prod.yml` بساز که سرویس `app` رو به یه شبکه‌ی Docker
+   مشترک (`docker network create web_shared`) وصل کنه، با یه alias ثابت
+   (مثلاً `freemiga_app`) — این فایل دستی سرورمحوره و تو گیت نیست
+3. همون nginx موجود رو هم به همون شبکه وصل کن: `docker network connect web_shared <nginx-container>`
+4. یه فایل کانفیگ جدید (مثل `nginx/conf.d/freemiga.conf` همین پروژه) رو کپی
+   کن تو پوشه‌ی conf.d همون nginx موجود، با `proxy_pass http://freemiga_app:8001`
+5. برای گواهی SSL از همون certbot موجود استفاده کن:
+   `docker compose run --rm --entrypoint certbot certbot certonly --webroot -w /var/www/certbot -d freemiga.com -d www.freemiga.com`
+6. چون معمولاً پورت ۴۴۳ واقعی رو یه سرویس دیگه (مثلاً Xray/Marzban) قبضه کرده،
+   دامنه رو از پشت Cloudflare رد کن و با یه Origin Rule ترافیک ۴۴۳ رو به همون
+   پورتی که nginx موجود واقعاً روش گوش می‌ده (مثلاً ۸۴۴۴) هدایت کن.
 
 ### ۲. بالا آوردن اپ و دیتابیس (بدون nginx هنوز)
 ```bash
@@ -111,7 +152,7 @@ docker compose ps
 
 ### به‌روزرسانی بعد از تغییر کد
 ```bash
-git pull   # یا هر روشی که کد جدید رو میاری
+git pull origin main
 docker compose build app
 docker compose up -d app
 ```
