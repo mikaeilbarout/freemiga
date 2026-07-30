@@ -97,6 +97,7 @@
 
     <div id="orders" style="display:none">
       <div class="list-toolbar">
+        <input type="text" id="orderSearch" placeholder="Search username or plan…">
         <select id="orderStatusFilter">
           <option value="">All statuses</option>
           <option value="pending">Pending</option>
@@ -104,13 +105,16 @@
           <option value="provisioned">Active</option>
           <option value="expired">Expired</option>
           <option value="failed">Failed</option>
-          <option value="cancelled">Cancelled</option>
         </select>
         <span class="list-count" id="orderCount"></span>
       </div>
       <div class="list-container" id="orderRows"></div>
-      <div class="load-more-row" id="orderLoadMoreRow" style="display:none">
-        <button class="btn btn-ghost btn-sm" onclick="loadMoreOrders()">Load more</button>
+      <div class="load-more-row" id="orderPaginationRow" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:center;gap:14px">
+          <button class="btn btn-ghost btn-sm" id="orderPrevBtn" onclick="changeOrdersPage(-1)">← Prev</button>
+          <span id="orderPageIndicator" style="font-size:12.5px;color:var(--text-dim)"></span>
+          <button class="btn btn-ghost btn-sm" id="orderNextBtn" onclick="changeOrdersPage(1)">Next →</button>
+        </div>
       </div>
     </div>
 
@@ -173,8 +177,9 @@ async function adminLogin() {
 }
 
 const PAGE_SIZE = 25;
+const ORDER_PAGE_SIZE = 10;
 let customerPage = 1, customerSearchTimer = null;
-let orderPage = 1;
+let orderPage = 1, orderSearchTimer = null;
 let ticketPage = 1;
 let auditPage = 1;
 
@@ -247,11 +252,11 @@ function orderRowHtml(o) {
   return `
     <div class="list-row">
       <div class="lr-main">
-        <div class="lr-title">$${o.amount_due} ${o.is_renewal ? '(renewal)' : '(new)'}</div>
-        <div class="lr-sub">${o.payment_method === 'card' ? 'Card (Stripe)' : o.payment_method === 'crypto' ? `Crypto (USDT-${o.crypto_network === 'polygon' ? 'Polygon' : 'TRC20'})` : 'Free'} · ${new Date(o.created_at).toLocaleString('en-US')}</div>
+        <div class="lr-title">${escapeHtml(o.customer_username)} — ${escapeHtml(o.plan_name)}</div>
+        <div class="lr-sub">$${o.amount_due} ${o.is_renewal ? '(renewal)' : '(new)'} · ${o.payment_method === 'card' ? 'Card (Stripe)' : o.payment_method === 'crypto' ? `Crypto (USDT-${o.crypto_network === 'polygon' ? 'Polygon' : 'TRC20'})` : 'Free'} · ${new Date(o.created_at).toLocaleString('en-US')}</div>
       </div>
       <div class="lr-right">
-        <span class="badge ${o.status === 'provisioned' ? 'badge-success' : o.status === 'pending' ? 'badge-warning' : o.status === 'cancelled' ? 'badge-neutral' : 'badge-danger'}">${statusLabel(o.status)}</span>
+        <span class="badge ${o.status === 'provisioned' ? 'badge-success' : o.status === 'pending' ? 'badge-warning' : 'badge-danger'}">${statusLabel(o.status)}</span>
         ${(o.status === 'pending' || o.status === 'failed') && o.payment_method === 'crypto'
           ? `<div class="lr-actions"><button class="btn btn-ghost btn-sm" onclick="confirmOrder('${o.id}')">Confirm manually</button></div>`
           : ''}
@@ -263,23 +268,33 @@ function orderRowHtml(o) {
 async function loadOrders(reset = true) {
   if (reset) { orderPage = 1; }
   const status = document.getElementById('orderStatusFilter').value;
-  const params = new URLSearchParams({page: orderPage, page_size: PAGE_SIZE, status});
+  const q = document.getElementById('orderSearch').value.trim();
+  const params = new URLSearchParams({page: orderPage, page_size: ORDER_PAGE_SIZE, status});
+  if (q) params.set('q', q);
   const res = await fetch(`/api/admin/orders?${params}`);
   if (!res.ok) return;
   const data = await res.json();
   const container = document.getElementById('orderRows');
-  const html = data.items.map(orderRowHtml).join('');
-  if (reset) {
-    container.innerHTML = html || '<div class="empty-state">No orders found</div>';
-  } else {
-    container.insertAdjacentHTML('beforeend', html);
-  }
+  container.innerHTML = data.items.map(orderRowHtml).join('') || '<div class="empty-state">No orders found</div>';
   document.getElementById('orderCount').textContent = `${data.total} total`;
-  document.getElementById('orderLoadMoreRow').style.display = orderPage * PAGE_SIZE < data.total ? 'block' : 'none';
+
+  const totalPages = Math.max(1, Math.ceil(data.total / ORDER_PAGE_SIZE));
+  document.getElementById('orderPaginationRow').style.display = data.total > ORDER_PAGE_SIZE ? 'block' : 'none';
+  document.getElementById('orderPageIndicator').textContent = `Page ${orderPage} of ${totalPages}`;
+  document.getElementById('orderPrevBtn').disabled = orderPage <= 1;
+  document.getElementById('orderNextBtn').disabled = orderPage >= totalPages;
 }
 
-function loadMoreOrders() { orderPage++; loadOrders(false); }
+function changeOrdersPage(delta) {
+  orderPage += delta;
+  loadOrders(false);
+}
+
 document.getElementById('orderStatusFilter').addEventListener('change', () => loadOrders(true));
+document.getElementById('orderSearch').addEventListener('input', () => {
+  clearTimeout(orderSearchTimer);
+  orderSearchTimer = setTimeout(() => loadOrders(true), 350);
+});
 
 async function confirmOrder(id) {
   if (!confirm('Confirm this order manually? Only do this after verifying the payment yourself on-chain.')) return;

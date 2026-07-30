@@ -24,7 +24,7 @@ from app.schemas import (
     AdminLoginIn,
     BanIn,
     CustomerAdminOut,
-    OrderOut,
+    OrderAdminOut,
     PlanCreate,
     PlanOut,
     PlanUpdate,
@@ -159,28 +159,50 @@ def list_customers(
 def list_orders(
     db: Session = Depends(get_db),
     status: str = "",
+    q: str | None = None,
     page: int = 1,
     page_size: int = 25,
 ):
-    query = db.query(Order)
+    # Cancelled orders are checkout abandonment noise (e.g. a customer
+    # switched plans mid-checkout) — same reasoning as hiding them from the
+    # customer's own order history, they're not useful here either.
+    query = (
+        db.query(Order)
+        .join(Customer, Order.customer_id == Customer.id)
+        .join(Plan, Order.plan_id == Plan.id)
+        .filter(Order.status != OrderStatus.cancelled)
+    )
     if status:
         try:
             query = query.filter(Order.status == OrderStatus(status))
         except ValueError:
             raise HTTPException(400, "Invalid status")
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.filter(or_(Customer.username.ilike(like), Plan.name.ilike(like)))
     total = query.count()
-    items = (
+    orders = (
         query.order_by(Order.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
-    return {
-        "items": [OrderOut.model_validate(o) for o in items],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-    }
+    items = [
+        OrderAdminOut(
+            id=o.id,
+            customer_username=o.customer.username,
+            plan_name=o.plan.name,
+            status=o.status,
+            payment_method=o.payment_method,
+            crypto_network=o.crypto_network,
+            amount_due=o.amount_due,
+            is_renewal=o.is_renewal,
+            expires_at=o.expires_at,
+            created_at=o.created_at,
+        )
+        for o in orders
+    ]
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.post("/customers/{customer_id}/ban", dependencies=[Depends(require_admin)])

@@ -241,6 +241,19 @@ class BanIn(BaseModel):
     reason: str
 
 
+class OrderAdminOut(BaseModel):
+    id: str
+    customer_username: str
+    plan_name: str
+    status: str
+    payment_method: str
+    crypto_network: Optional[str] = None
+    amount_due: float
+    is_renewal: bool
+    expires_at: datetime
+    created_at: datetime
+
+
 class TicketAdminOut(BaseModel):
     id: str
     customer_id: str
