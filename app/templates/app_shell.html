@@ -428,6 +428,10 @@ function activateSection(name, opts) {
     history.pushState({section: name}, '', SECTION_ROUTES[name]);
   }
   if (opts.scroll !== false) window.scrollTo({top: 0, behavior: 'instant'});
+  // Accordions inside the panel being switched TO were sized while hidden
+  // (scrollHeight reads 0 for display:none elements), so any open-by-default
+  // one in there needs re-syncing now that it's actually visible.
+  refreshOpenAccordions();
 }
 
 document.querySelectorAll('.app-sidebar-link, .nav-section-link').forEach(link => {
@@ -445,7 +449,26 @@ window.addEventListener('popstate', e => {
 activateSection(INITIAL_SECTION);
 
 function toggleAccordion(header) {
-  header.closest('.accordion-block').classList.toggle('open');
+  const block = header.closest('.accordion-block');
+  block.classList.toggle('open');
+  syncAccordionHeight(block);
+}
+
+// The open/close animation needs *some* max-height to transition to/from,
+// but a fixed cap (the CSS default is a fallback only) clips any accordion
+// whose content grows past it — happened for real with the plans list once
+// there were more than a handful of plans. Size it to the actual content
+// instead, and re-sync whenever content is injected asynchronously after
+// the accordion is already open (plans/orders/telegram status all load via
+// fetch() after initial render, so a snapshot taken at toggle-time would be
+// stale by the time they land).
+function syncAccordionHeight(block) {
+  const body = block.querySelector('.accordion-body');
+  body.style.maxHeight = block.classList.contains('open') ? body.scrollHeight + 'px' : '';
+}
+
+function refreshOpenAccordions() {
+  document.querySelectorAll('.accordion-block.open').forEach(syncAccordionHeight);
 }
 
 // ===================== Overview =====================
@@ -721,6 +744,7 @@ async function loadPlans() {
   if (wantedPlan && plans.some(p => p.id === wantedPlan)) {
     selectPlan(wantedPlan);
   }
+  refreshOpenAccordions();
 }
 
 function statusBadgeBilling(s) {
@@ -737,7 +761,11 @@ async function loadAllOrders() {
   const res = await fetch('/api/orders');
   const orders = await res.json();
   const container = document.getElementById('orders');
-  if (!orders.length) { container.innerHTML = `<div class="empty-state">${BILLING_I18N.noOrders}</div>`; return; }
+  if (!orders.length) {
+    container.innerHTML = `<div class="empty-state">${BILLING_I18N.noOrders}</div>`;
+    refreshOpenAccordions();
+    return;
+  }
 
   hasAccount = orders.some(o => o.status === 'provisioned');
   document.getElementById('billingPageTitle').textContent = hasAccount ? BILLING_I18N.renewTitle : BILLING_I18N.buyTitle;
@@ -751,6 +779,7 @@ async function loadAllOrders() {
       ${statusBadgeBilling(o.status)}
     </div>
   `).join('');
+  refreshOpenAccordions();
 }
 
 async function buyPlan(method, cryptoNetwork) {
@@ -910,6 +939,7 @@ async function loadTelegramStatus() {
     status.innerHTML = `${ACCOUNT_I18N.telegramUnlinkedPre}
       <br><a href="${data.link}" target="_blank" style="color:var(--accent-2);font-weight:600">${ACCOUNT_I18N.telegramConnect}</a>`;
   }
+  refreshOpenAccordions();
 }
 
 function showDeleteConfirm() {
