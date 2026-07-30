@@ -1,0 +1,29 @@
+# Opt-in overlay for the "this host already has its own nginx fronting
+# other sites" deployment path (see README.md, "اگه سرور از قبل یه nginx
+# دیگه داره"). NOT auto-loaded by plain `docker compose` — must be passed
+# explicitly:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.shared-nginx.yml up -d db app
+#
+# Attaches the app container to the pre-existing `web_shared` docker
+# network under the alias that external nginx's proxy_pass expects
+# (`freemiga_app`). Declaring this in compose — instead of a one-off
+# `docker network connect` run by hand — means the attachment survives
+# every future `docker compose up -d app` (a plain recreate otherwise only
+# joins networks declared in compose, silently dropping any manually
+# added ones and taking the site offline until reconnected by hand).
+#
+# The web_shared network itself must already exist (`docker network
+# create web_shared`, done once) and the external nginx container must
+# already be connected to it.
+services:
+  app:
+    networks:
+      default:
+      web_shared:
+        aliases:
+          - freemiga_app
+
+networks:
+  web_shared:
+    external: true

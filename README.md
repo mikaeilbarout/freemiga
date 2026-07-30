@@ -113,21 +113,29 @@ nano .env
 `X-Forwarded-For`/`X-Real-IP` رو جعل کنه.
 
 **اگه سرور از قبل یه nginx دیگه داره** (مثلاً یه سایت دیگه‌ی همین صاحب سرور رو
-پورت ۸۰/۴۴۳ نشسته — دقیقاً وضعیت `freemiga.com` روی سرور فعلی، که کنار
-`persepolisconstruction.co.uk` هاست می‌شه): مراحل بالا (nginx/certbot خودِ این
-پروژه) رو اجرا نکن. به‌جاش:
-1. فقط `docker compose up -d db app` رو بزن (نه nginx/certbot این پروژه)
-2. یه `docker-compose.prod.yml` بساز که سرویس `app` رو به یه شبکه‌ی Docker
-   مشترک (`docker network create web_shared`) وصل کنه، با یه alias ثابت
-   (مثلاً `freemiga_app`) — این فایل دستی سرورمحوره و تو گیت نیست
-3. همون nginx موجود رو هم به همون شبکه وصل کن: `docker network connect web_shared <nginx-container>`
+پورت ۸۰/۴۴۳ نشسته — دقیقاً وضعیت فعلی این سرور، که `shop.persepolisconstruction.co.uk`
+کنار `persepolisconstruction.co.uk` خودش و پنل Marzban هاست می‌شه): مراحل بالا
+(nginx/certbot خودِ این پروژه) رو اجرا نکن. به‌جاش از overlay آماده‌ی
+`docker-compose.shared-nginx.yml` استفاده کن (توضیحش رو بخون — alias
+`freemiga_app` که توش تعریف شده باید دقیقاً با `proxy_pass` نگینکس موجود یکی باشه):
+1. یه‌بار: `docker network create web_shared` (اگه از قبل نیست)
+2. `docker compose -f docker-compose.yml -f docker-compose.shared-nginx.yml up -d db app`
+   — این جای مرحله‌ی «بالا آوردن اپ و دیتابیس» پایین رو می‌گیره؛ nginx/certbot خودِ
+   این پروژه رو دیگه بالا نیار
+3. همون nginx موجود رو هم به همون شبکه وصل کن (یه‌بار): `docker network connect web_shared <nginx-container>`
 4. یه فایل کانفیگ جدید (مثل `nginx/conf.d/freemiga.conf` همین پروژه) رو کپی
    کن تو پوشه‌ی conf.d همون nginx موجود، با `proxy_pass http://freemiga_app:8001`
 5. برای گواهی SSL از همون certbot موجود استفاده کن:
-   `docker compose run --rm --entrypoint certbot certbot certonly --webroot -w /var/www/certbot -d freemiga.com -d www.freemiga.com`
+   `docker compose run --rm --entrypoint certbot certbot certonly --webroot -w /var/www/certbot -d shop.persepolisconstruction.co.uk`
 6. چون معمولاً پورت ۴۴۳ واقعی رو یه سرویس دیگه (مثلاً Xray/Marzban) قبضه کرده،
    دامنه رو از پشت Cloudflare رد کن و با یه Origin Rule ترافیک ۴۴۳ رو به همون
    پورتی که nginx موجود واقعاً روش گوش می‌ده (مثلاً ۸۴۴۴) هدایت کن.
+
+**نکته‌ی مهم:** چون alias شبکه فقط با استفاده از هر دو فایل کامپوز (`-f
+docker-compose.yml -f docker-compose.shared-nginx.yml`) تعریف می‌شه، هر آپدیت
+بعدی (`docker compose build/up -d app`) هم باید با همین دو `-f` زده بشه —
+وگرنه recreate کانتینر اتصالش به `web_shared` رو از دست می‌ده و سایت آفلاین
+می‌شه تا دوباره دستی وصلش کنی.
 
 ### ۲. بالا آوردن اپ و دیتابیس (بدون nginx هنوز)
 ```bash
@@ -156,6 +164,11 @@ git pull origin main
 docker compose build app
 docker compose up -d app
 ```
+**اگه از سناریوی "nginx مشترک" بالا استفاده می‌کنی**، هر دو دستور بالا رو با
+`-f docker-compose.yml -f docker-compose.shared-nginx.yml` بزن، وگرنه
+`up -d app` کانتینر رو recreate می‌کنه و alias `freemiga_app` روی
+`web_shared` رو گم می‌کنه (سایت آفلاین می‌شه تا دستی با `docker network
+connect --alias freemiga_app web_shared <container>` دوباره وصلش کنی).
 
 ### دیدن لاگ‌ها
 ```bash
