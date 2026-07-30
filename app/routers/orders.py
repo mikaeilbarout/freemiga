@@ -283,9 +283,15 @@ def my_orders(
     customer: Customer = Depends(get_current_customer),
     db: Session = Depends(get_db),
 ):
+    # Cancelled orders are excluded on purpose — a customer never
+    # deliberately created these (auto-cancelled when they picked a
+    # different plan mid-checkout, see create_order's pending-order
+    # handling, or from the "cancel" link on a pending order they
+    # abandoned) and they carry no useful information for the customer,
+    # just noise in their order history.
     return (
         db.query(Order)
-        .filter(Order.customer_id == customer.id)
+        .filter(Order.customer_id == customer.id, Order.status != OrderStatus.cancelled)
         .order_by(Order.created_at.desc())
         .all()
     )

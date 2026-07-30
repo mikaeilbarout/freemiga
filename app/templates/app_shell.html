@@ -673,17 +673,10 @@ let selectedPlan = null;
 let hasAccount = false;
 let plansById = {};
 let availableMethods = {card: false, crypto: false, crypto_networks: {}};
-let termsAccepted = false;
-
 async function loadMeBilling() {
   const res = await fetch('/api/auth/me');
   if (!res.ok) return;
   const me = await res.json();
-
-  termsAccepted = !!me.terms_accepted;
-  if (termsAccepted) {
-    document.getElementById('termsCheckboxRow').style.display = 'none';
-  }
 
   if (!me.email_verified) {
     document.getElementById('verifyNoticeBilling').style.display = 'flex';
@@ -708,7 +701,7 @@ function onTermsCheckboxChange() {
 function selectPlan(id) {
   document.querySelectorAll('.plan-option').forEach(e => e.classList.toggle('sel', e.dataset.id === id));
   selectedPlan = id;
-  const termsOk = termsAccepted || document.getElementById('termsCheckbox').checked;
+  const termsOk = document.getElementById('termsCheckbox').checked;
   const blocked = document.getElementById('verifyNoticeBilling').style.display === 'flex' ||
                    document.getElementById('banNoticeBilling').style.display === 'block' ||
                    !termsOk;
@@ -815,13 +808,13 @@ async function loadAllOrders() {
 
 async function buyPlan(method, cryptoNetwork, confirmCancelPending) {
   if (!selectedPlan) return;
-  if (!termsAccepted) {
-    const acceptRes = await fetch('/api/auth/accept-terms', {method: 'POST'});
-    if (!acceptRes.ok) {
-      showToast(BILLING_I18N.orderError, 'error');
-      return;
-    }
-    termsAccepted = true;
+  // Re-accepted fresh on every purchase — the checkbox is never pre-checked
+  // from a prior visit (see selectPlan's termsOk), and the endpoint always
+  // re-stamps terms_accepted_at regardless of prior history.
+  const acceptRes = await fetch('/api/auth/accept-terms', {method: 'POST'});
+  if (!acceptRes.ok) {
+    showToast(BILLING_I18N.orderError, 'error');
+    return;
   }
   const res = await fetch('/api/orders', {
     method: 'POST',
