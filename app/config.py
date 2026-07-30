@@ -81,6 +81,14 @@ class Settings:
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     RESEND_FROM_EMAIL: str = os.getenv("RESEND_FROM_EMAIL", "Freemiga <onboarding@resend.dev>")
 
+    # Shared secret the separate marzban-guard abuse-detection system uses
+    # to authenticate calls to POST /api/integrations/marzban-guard/status
+    # (see app/routers/integrations.py). Leave empty to keep that endpoint
+    # disabled — marzban-guard still enforces restrictions directly
+    # against Marzban either way, this just keeps this shop's own
+    # Customer.is_banned flag (and the customer-facing notice) in sync.
+    MARZBAN_GUARD_WEBHOOK_SECRET: str = os.getenv("MARZBAN_GUARD_WEBHOOK_SECRET", "")
+
     SITE_NAME: str = os.getenv("SITE_NAME", "Freemiga")
 
     # Language (website i18n)

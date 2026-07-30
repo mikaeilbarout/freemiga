@@ -253,3 +253,11 @@ class TicketAdminOut(BaseModel):
     status: str
     created_at: datetime
     messages: list[TicketMessageOut]
+
+
+# ---- Integrations (marzban-guard) ----
+
+class MarzbanGuardStatusIn(BaseModel):
+    username: str
+    banned: bool
+    reason: str = ""

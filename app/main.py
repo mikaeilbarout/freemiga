@@ -16,7 +16,7 @@ from app.database import Base, engine, SessionLocal
 from app.lang import LANG_COOKIE, SUPPORTED_LANGUAGES, resolve_lang
 from app.limiter import limiter
 from app.models import Plan
-from app.routers import admin, auth, banners, orders, payments, plans, support
+from app.routers import admin, auth, banners, integrations, orders, payments, plans, support
 from app.services.telegram import telegram_link_loop
 
 logging.basicConfig(level=logging.INFO)
@@ -100,6 +100,7 @@ app.include_router(support.router)
 app.include_router(admin.router)
 app.include_router(banners.router)
 app.include_router(banners.admin_router)
+app.include_router(integrations.router)
 
 
 def _seed_plans() -> None:
