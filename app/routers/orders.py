@@ -31,6 +31,8 @@ async def create_order(
         raise HTTPException(403, i18n.t(lang, "err_account_suspended", reason=reason))
     if not customer.email_verified:
         raise HTTPException(403, i18n.t(lang, "err_verify_email_first"))
+    if not customer.terms_accepted_at:
+        raise HTTPException(403, i18n.t(lang, "err_terms_not_accepted"))
 
     plan = db.query(Plan).filter(Plan.id == payload.plan_id, Plan.is_active.is_(True)).first()
     if not plan:

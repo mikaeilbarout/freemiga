@@ -58,6 +58,11 @@ TEXT = {
         "verification_resent": "✅ A new verification email has been sent — please check your inbox.",
         "already_verified": "Your email is already verified.",
         "email_verified_notice": "✅ Your email has been verified! You can now complete your purchase.",
+        "terms_prompt": "Before you can purchase, please read and agree to our Acceptable Use Policy "
+        "(covers prohibited activity, device limits, and automated abuse enforcement): "
+        "{site_base_url}/terms#acceptable-use\n\nTap below once you've read it to continue.",
+        "terms_agree_btn": "✅ I agree, continue",
+        "terms_not_accepted": "Please agree to the Acceptable Use Policy first — use /plans to try again.",
         "choose_payment": "How would you like to pay for {plan_name} (${price})?",
         "pay_card": "💳 Pay with card",
         "pay_crypto": "🪙 Pay with crypto",
@@ -112,6 +117,11 @@ TEXT = {
         "verification_resent": "✅ یک ایمیل تأیید جدید فرستاده شد — لطفاً صندوقتون رو چک کنید.",
         "already_verified": "ایمیل شما قبلاً تأیید شده.",
         "email_verified_notice": "✅ ایمیل شما تأیید شد! حالا می‌تونید خریدتون رو تکمیل کنید.",
+        "terms_prompt": "قبل از خرید، لطفاً قوانین استفاده صحیح رو بخونید و بپذیرید "
+        "(شامل فعالیت‌های ممنوع، محدودیت دستگاه، و اجرای خودکار در برابر سوءاستفاده):\n"
+        "{site_base_url}/terms#acceptable-use\n\nبعد از خوندنش، دکمه‌ی زیر رو بزنید تا ادامه بدیم.",
+        "terms_agree_btn": "✅ می‌پذیرم، ادامه",
+        "terms_not_accepted": "لطفاً اول قوانین استفاده صحیح رو بپذیرید — با /plans دوباره امتحان کنید.",
         "choose_payment": "پلن {plan_name} (${price}) رو چطور مایلید پرداخت کنید؟",
         "pay_card": "💳 پرداخت با کارت",
         "pay_crypto": "🪙 پرداخت با کریپتو",
@@ -254,12 +264,23 @@ def _verify_email_kb(lang: str) -> dict:
     return _kb([[{"text": _t(lang, "resend_verification"), "callback_data": "resendverify"}]])
 
 
+def _terms_kb(lang: str, plan_id: str) -> dict:
+    return _kb([[{"text": _t(lang, "terms_agree_btn"), "callback_data": f"agreeterms:{plan_id}"}]])
+
+
 async def _show_payment_choice(chat_id: str, lang: str, plan: Plan, customer: Customer | None = None) -> None:
     if customer and not customer.email_verified:
         await telegram.send_message(
             chat_id,
             _t(lang, "verify_email_first", email=customer.email or ""),
             reply_markup=_verify_email_kb(lang),
+        )
+        return
+    if customer and not customer.terms_accepted_at:
+        await telegram.send_message(
+            chat_id,
+            _t(lang, "terms_prompt", site_base_url=settings.SITE_BASE_URL),
+            reply_markup=_terms_kb(lang, plan.id),
         )
         return
     if not stripe_gateway.is_configured() and not _crypto_configured():
@@ -311,6 +332,12 @@ async def _start_order(db, chat_id: str, lang: str, customer: Customer, plan_id:
             _t(lang, "verify_email_first", email=customer.email or ""),
             reply_markup=_verify_email_kb(lang),
         )
+        return
+
+    if not customer.terms_accepted_at:
+        # Shouldn't normally happen (_show_payment_choice gates this first),
+        # but guard here too rather than let an order slip through.
+        await telegram.send_message(chat_id, _t(lang, "terms_not_accepted"))
         return
 
     pending = (
@@ -578,6 +605,17 @@ async def _handle_callback(db, callback_query: dict) -> None:
             await telegram.send_message(chat_id, _t(lang, "verification_resent"))
         elif customer and customer.email_verified:
             await telegram.send_message(chat_id, _t(lang, "already_verified"))
+        return
+
+    if data.startswith("agreeterms:"):
+        plan_id = data.split(":", 1)[1]
+        if customer:
+            if not customer.terms_accepted_at:
+                customer.terms_accepted_at = datetime.utcnow()
+                db.commit()
+            plan = db.query(Plan).filter(Plan.id == plan_id).first()
+            if plan:
+                await _show_payment_choice(chat_id, lang, plan, customer)
         return
 
     if data.startswith("pay:"):

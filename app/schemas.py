@@ -103,6 +103,7 @@ class CustomerOut(BaseModel):
     contact: Optional[str] = None
     is_banned: bool
     ban_reason: Optional[str] = None
+    terms_accepted: bool
 
     class Config:
         from_attributes = True

@@ -120,6 +120,15 @@ def me(customer: Customer = Depends(get_current_customer)):
     return customer
 
 
+@router.post("/accept-terms", response_model=CustomerOut)
+def accept_terms(customer: Customer = Depends(get_current_customer), db: Session = Depends(get_db)):
+    if not customer.terms_accepted_at:
+        customer.terms_accepted_at = datetime.utcnow()
+        db.commit()
+        db.refresh(customer)
+    return customer
+
+
 @router.patch("/me", response_model=CustomerOut)
 def update_profile(
     payload: UpdateProfileIn,

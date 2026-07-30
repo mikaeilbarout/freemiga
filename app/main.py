@@ -216,7 +216,7 @@ def pay_page(request: Request, order_id: str):
 
 @app.get("/terms", response_class=HTMLResponse)
 def terms_page(request: Request):
-    return render(request, "terms.html", updated_at="July 28, 2026")
+    return render(request, "terms.html", updated_at="July 30, 2026")
 
 
 @app.get("/guide", response_class=HTMLResponse)

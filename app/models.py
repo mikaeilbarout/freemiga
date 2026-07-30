@@ -31,6 +31,14 @@ class Customer(Base):
 
     is_banned = Column(Boolean, default=False)
     ban_reason = Column(String, nullable=True)
+    # Acceptable Use Policy (see /terms#acceptable-use). Required before the
+    # first order — checked in routers/orders.py — and, once set, never
+    # needs re-accepting unless we explicitly reset it for a policy change.
+    terms_accepted_at = Column(DateTime, nullable=True)
+
+    @property
+    def terms_accepted(self) -> bool:
+        return self.terms_accepted_at is not None
     # Soft-delete: PII is scrubbed and the Marzban VPN account is removed,
     # but the row (and its historical orders) stays for bookkeeping.
     is_deleted = Column(Boolean, default=False)
