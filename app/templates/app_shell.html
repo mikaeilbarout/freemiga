@@ -72,6 +72,14 @@
   }
   .promo-notice strong { color: var(--success); }
 
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(5,6,10,0.72); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;
+  }
+  .modal-box { width: 100%; max-width: 400px; padding: 26px; }
+  .modal-box h3 { font-family: var(--font-display); font-size: 17px; margin: 0 0 10px; }
+  .modal-box p { font-size: 13.5px; line-height: 1.75; color: var(--text-dim); margin: 0 0 22px; }
+
   .terms-notice {
     background: var(--accent-soft); border: 1px solid rgba(124,92,255,0.35);
     border-radius: var(--radius); padding: 14px 18px; margin-bottom: 16px;
@@ -415,6 +423,17 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<div class="modal-overlay" id="pendingOrderModal" style="display:none">
+  <div class="card modal-box">
+    <h3>{{ t('pending_order_modal_title') }}</h3>
+    <p id="pendingOrderModalMsg"></p>
+    <div class="row gap-8" style="justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closePendingOrderModal()">{{ t('pending_order_modal_cancel') }}</button>
+      <button class="btn btn-primary" onclick="confirmPendingOrderReplace()">{{ t('pending_order_modal_confirm') }}</button>
+    </div>
   </div>
 </div>
 
@@ -819,9 +838,7 @@ async function buyPlan(method, cryptoNetwork, confirmCancelPending) {
     // bot's "cancel & choose again" prompt, instead of just erroring out
     // and leaving them to go hunt down the old order in history themselves.
     if (data.detail && data.detail.code === 'pending_order_exists') {
-      if (confirm(data.detail.message)) {
-        return buyPlan(method, cryptoNetwork, true);
-      }
+      openPendingOrderModal(data.detail.message, method, cryptoNetwork);
       return;
     }
     showToast((typeof data.detail === 'string' && data.detail) || BILLING_I18N.orderError, 'error');
@@ -833,6 +850,25 @@ async function buyPlan(method, cryptoNetwork, confirmCancelPending) {
   } else {
     window.location.href = `/pay/${order.id}`;
   }
+}
+
+let pendingOrderRetry = null;
+
+function openPendingOrderModal(message, method, cryptoNetwork) {
+  pendingOrderRetry = {method, cryptoNetwork};
+  document.getElementById('pendingOrderModalMsg').textContent = message;
+  document.getElementById('pendingOrderModal').style.display = 'flex';
+}
+
+function closePendingOrderModal() {
+  pendingOrderRetry = null;
+  document.getElementById('pendingOrderModal').style.display = 'none';
+}
+
+function confirmPendingOrderReplace() {
+  const retry = pendingOrderRetry;
+  closePendingOrderModal();
+  if (retry) buyPlan(retry.method, retry.cryptoNetwork, true);
 }
 
 async function cancelOrder(id) {
