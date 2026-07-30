@@ -1,7 +1,7 @@
 import logging
 
 from app.models import Order, OrderStatus
-from app.services import marzban, telegram
+from app.services import marzban, marzban_guard, telegram
 
 logger = logging.getLogger("payment_poller")
 
@@ -57,6 +57,11 @@ async def _provision(order: Order, db) -> None:
         return
 
     db.commit()
+
+    await _notify(
+        marzban_guard.push_device_limit(customer.username, plan.max_devices),
+        "marzban-guard device-limit push", order.id,
+    )
 
     kind_fa = "تمدید" if order.is_renewal else "خرید جدید"
     await _notify(

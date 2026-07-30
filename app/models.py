@@ -72,6 +72,10 @@ class Plan(Base):
     data_limit_gb = Column(Integer, nullable=False)
     duration_days = Column(Integer, nullable=False)
     is_active = Column(Boolean, default=True)
+    # How many devices/IPs at once this plan allows — enforced by the
+    # separate marzban-guard abuse-detection system, not by this app.
+    # NULL means "use marzban-guard's own global default", not "unlimited".
+    max_devices = Column(Integer, nullable=True)
 
     orders = relationship("Order", back_populates="plan")
 

@@ -89,6 +89,15 @@ class Settings:
     # Customer.is_banned flag (and the customer-facing notice) in sync.
     MARZBAN_GUARD_WEBHOOK_SECRET: str = os.getenv("MARZBAN_GUARD_WEBHOOK_SECRET", "")
 
+    # The other direction: this shop pushes each plan's device-count
+    # allowance to marzban-guard's admin API whenever an order is
+    # provisioned (see app/services/marzban_guard.py). Leave
+    # MARZBAN_GUARD_BASE_URL empty to skip this entirely — plans just
+    # won't have a per-plan device limit enforced, only marzban-guard's
+    # own global default.
+    MARZBAN_GUARD_BASE_URL: str = os.getenv("MARZBAN_GUARD_BASE_URL", "")
+    MARZBAN_GUARD_ADMIN_API_KEY: str = os.getenv("MARZBAN_GUARD_ADMIN_API_KEY", "")
+
     SITE_NAME: str = os.getenv("SITE_NAME", "Freemiga")
 
     # Language (website i18n)

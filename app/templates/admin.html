@@ -352,6 +352,7 @@ async function loadPlans() {
       <input id="newPlanPrice" placeholder="Price (USDT)" type="number" step="0.01">
       <input id="newPlanData" placeholder="Data limit (GB)" type="number">
       <input id="newPlanDays" placeholder="Duration (days)" type="number">
+      <input id="newPlanDevices" placeholder="Max devices (optional — blank uses marzban-guard's default)" type="number">
       <button class="btn btn-primary btn-sm" onclick="createPlan()">Create plan</button>
     </div>
   ` + plans.map(p => `
@@ -360,9 +361,10 @@ async function loadPlans() {
         <div class="name">${p.name} ${!p.is_active ? '(inactive)' : ''}</div>
         <span class="badge ${p.is_active ? 'badge-success' : 'badge-danger'}">$${p.price_usdt}</span>
       </div>
-      <div class="row-meta">${p.data_limit_gb} GB · ${p.duration_days} days</div>
+      <div class="row-meta">${p.data_limit_gb} GB · ${p.duration_days} days · ${p.max_devices ? p.max_devices + ' devices' : 'default device limit'}</div>
       <div class="actions">
         <button class="btn btn-ghost btn-sm" onclick="editPlanPrice('${p.id}', ${p.price_usdt})">Change price</button>
+        <button class="btn btn-ghost btn-sm" onclick="editPlanDevices('${p.id}', ${p.max_devices ?? 'null'})">Change device limit</button>
         ${p.is_active ? `<button class="btn btn-danger btn-sm" onclick="deactivatePlan('${p.id}')">Deactivate</button>` : ''}
       </div>
     </div>
@@ -440,11 +442,13 @@ async function deleteBanner(id) {
 }
 
 async function createPlan() {
+  const devicesRaw = document.getElementById('newPlanDevices').value.trim();
   const payload = {
     name: document.getElementById('newPlanName').value.trim(),
     price_usdt: parseFloat(document.getElementById('newPlanPrice').value),
     data_limit_gb: parseInt(document.getElementById('newPlanData').value),
     duration_days: parseInt(document.getElementById('newPlanDays').value),
+    max_devices: devicesRaw ? parseInt(devicesRaw) : null,
   };
   if (!payload.name || isNaN(payload.price_usdt) || !payload.data_limit_gb || !payload.duration_days) {
     showToast('Please fill in every field (price can be 0 for a free plan).', 'error');
@@ -463,6 +467,20 @@ async function editPlanPrice(id, currentPrice) {
   await fetch(`/api/admin/plans/${id}`, {
     method: 'PUT', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({price_usdt: parseFloat(newPrice)})
+  });
+  loadPlans();
+}
+
+async function editPlanDevices(id, currentMaxDevices) {
+  const input = prompt(
+    "Max devices for this plan (blank = use marzban-guard's default):",
+    currentMaxDevices ?? ''
+  );
+  if (input === null) return;
+  const trimmed = input.trim();
+  await fetch(`/api/admin/plans/${id}`, {
+    method: 'PUT', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({max_devices: trimmed ? parseInt(trimmed) : null})
   });
   loadPlans();
 }

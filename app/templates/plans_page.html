@@ -38,6 +38,7 @@ const PLANS_I18N = {
   dataAllowance: {{ t('plan_data_allowance', gb='__GB__')|tojson }},
   validity: {{ t('plan_validity', days='__DAYS__')|tojson }},
   fullAccess: {{ t('plan_full_access')|tojson }},
+  deviceLimit: {{ t('plan_device_limit', n='__N__')|tojson }},
   bestValue: {{ t('plan_best_value')|tojson }},
   freeTrialTag: {{ t('free_trial_tag')|tojson }},
   billedOnce: {{ t('plan_billed_once')|tojson }},
@@ -50,10 +51,12 @@ const PLANS_I18N = {
 };
 
 function planFeatures(p) {
+  const check = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>';
   return `
-    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg> ${PLANS_I18N.dataAllowance.replace('__GB__', p.data_limit_gb)}</li>
-    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg> ${PLANS_I18N.validity.replace('__DAYS__', p.duration_days)}</li>
-    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg> ${PLANS_I18N.fullAccess}</li>
+    <li>${check} ${PLANS_I18N.dataAllowance.replace('__GB__', p.data_limit_gb)}</li>
+    <li>${check} ${PLANS_I18N.validity.replace('__DAYS__', p.duration_days)}</li>
+    <li>${check} ${PLANS_I18N.fullAccess}</li>
+    ${p.max_devices ? `<li>${check} ${PLANS_I18N.deviceLimit.replace('__N__', p.max_devices)}</li>` : ''}
   `;
 }
 

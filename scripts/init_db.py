@@ -18,10 +18,10 @@ def seed_plans() -> None:
     try:
         if db.query(Plan).count() == 0:
             db.add_all([
-                Plan(name="Free Trial", price_usdt=0, data_limit_gb=1, duration_days=1),
-                Plan(name="Basic", price_usdt=5, data_limit_gb=10, duration_days=30),
-                Plan(name="Standard", price_usdt=9, data_limit_gb=30, duration_days=30),
-                Plan(name="Unlimited", price_usdt=15, data_limit_gb=100, duration_days=30),
+                Plan(name="Free Trial", price_usdt=0, data_limit_gb=1, duration_days=1, max_devices=1),
+                Plan(name="Basic", price_usdt=5, data_limit_gb=10, duration_days=30, max_devices=2),
+                Plan(name="Standard", price_usdt=9, data_limit_gb=30, duration_days=30, max_devices=3),
+                Plan(name="Unlimited", price_usdt=15, data_limit_gb=100, duration_days=30, max_devices=5),
             ])
             db.commit()
     finally:
