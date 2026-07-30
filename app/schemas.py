@@ -146,6 +146,9 @@ class OrderCreate(BaseModel):
     is_renewal: bool = False
     payment_method: str = "crypto"  # "crypto" or "card"
     crypto_network: Optional[str] = None  # "tron" or "polygon" — only used when payment_method == crypto
+    # Set on the retry after the customer confirms "cancel my other pending
+    # order and start this one instead" (see routers/orders.py's 409 check).
+    confirm_cancel_pending: bool = False
 
 
 class VerifyPaymentIn(BaseModel):

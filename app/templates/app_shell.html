@@ -794,7 +794,7 @@ async function loadAllOrders() {
   refreshOpenAccordions();
 }
 
-async function buyPlan(method, cryptoNetwork) {
+async function buyPlan(method, cryptoNetwork, confirmCancelPending) {
   if (!selectedPlan) return;
   if (!termsAccepted) {
     const acceptRes = await fetch('/api/auth/accept-terms', {method: 'POST'});
@@ -807,11 +807,24 @@ async function buyPlan(method, cryptoNetwork) {
   const res = await fetch('/api/orders', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({plan_id: selectedPlan, payment_method: method, crypto_network: cryptoNetwork || null})
+    body: JSON.stringify({
+      plan_id: selectedPlan, payment_method: method, crypto_network: cryptoNetwork || null,
+      confirm_cancel_pending: !!confirmCancelPending,
+    })
   });
   if (!res.ok) {
     const data = await res.json();
-    showToast(data.detail || BILLING_I18N.orderError, 'error');
+    // Structured 409 (see routers/orders.py) — the customer already has a
+    // pending order for something else. Ask once, same as the Telegram
+    // bot's "cancel & choose again" prompt, instead of just erroring out
+    // and leaving them to go hunt down the old order in history themselves.
+    if (data.detail && data.detail.code === 'pending_order_exists') {
+      if (confirm(data.detail.message)) {
+        return buyPlan(method, cryptoNetwork, true);
+      }
+      return;
+    }
+    showToast((typeof data.detail === 'string' && data.detail) || BILLING_I18N.orderError, 'error');
     return;
   }
   const order = await res.json();

@@ -38,6 +38,34 @@ async def create_order(
     if not plan:
         raise HTTPException(404, i18n.t(lang, "err_plan_not_found"))
 
+    # A customer can only ever be mid-checkout on one thing at a time. Rather
+    # than silently cancelling whatever they started before (surprising if
+    # they come back to that tab expecting it to still work) or letting a
+    # second pending order pile up alongside the first (confusing — two
+    # rows in order history both showing "Pay now" / "Cancel"), require an
+    # explicit confirm: the client re-sends with confirm_cancel_pending=true
+    # once the customer says yes. Mirrors the Telegram bot's existing
+    # "cancel & choose again" flow (services/telegram_bot.py) — same
+    # situation, same resolution, just adapted to a web request/response
+    # instead of a chat prompt.
+    pending = (
+        db.query(Order)
+        .filter(Order.customer_id == customer.id, Order.status == OrderStatus.pending)
+        .first()
+    )
+    if pending:
+        if not payload.confirm_cancel_pending:
+            raise HTTPException(
+                409,
+                {
+                    "code": "pending_order_exists",
+                    "message": i18n.t(lang, "err_pending_order_exists", plan_name=pending.plan.name),
+                    "pending_order_id": pending.id,
+                    "pending_plan_name": pending.plan.name,
+                },
+            )
+        order_service.cancel_pending_order(db, pending)
+
     already_has_account = (
         db.query(Order)
         .filter(Order.customer_id == customer.id, Order.status == OrderStatus.provisioned)
@@ -106,14 +134,6 @@ async def create_order(
             raise HTTPException(400, i18n.t(lang, "err_invalid_payment_method"))
         if not gateway.is_configured():
             raise HTTPException(400, i18n.t(lang, "err_crypto_unavailable"))
-
-    pending_order = (
-        db.query(Order)
-        .filter(Order.customer_id == customer.id, Order.status == OrderStatus.pending)
-        .first()
-    )
-    if pending_order:
-        raise HTTPException(409, i18n.t(lang, "err_pending_order_exists"))
 
     order = Order(
         customer_id=customer.id,
