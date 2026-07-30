@@ -20,9 +20,13 @@
     <div class="plans-empty">{{ t('plans_loading') }}</div>
   </div>
   <div class="plans-pagination" id="plansPagination" style="display:none">
-    <button class="btn btn-ghost btn-sm" id="plansPrevBtn" onclick="changePlansPage(-1)">{{ '→' if dir == 'rtl' else '←' }} {{ t('plans_prev') }}</button>
+    <button class="plans-pagination-btn" id="plansPrevBtn" onclick="changePlansPage(-1)" aria-label="{{ t('plans_prev') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M{{ '9 6l6 6-6 6' if dir == 'rtl' else '15 6l-6 6 6 6' }}"/></svg>
+    </button>
     <span class="plans-page-indicator" id="plansPageIndicator"></span>
-    <button class="btn btn-ghost btn-sm" id="plansNextBtn" onclick="changePlansPage(1)">{{ t('plans_next') }} {{ '←' if dir == 'rtl' else '→' }}</button>
+    <button class="plans-pagination-btn" id="plansNextBtn" onclick="changePlansPage(1)" aria-label="{{ t('plans_next') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M{{ '15 6l-6 6 6 6' if dir == 'rtl' else '9 6l6 6-6 6' }}"/></svg>
+    </button>
   </div>
 </section>
 

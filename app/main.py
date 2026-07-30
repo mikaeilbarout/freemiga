@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 
 from fastapi import FastAPI, Request
 from fastapi.exception_handlers import http_exception_handler
@@ -76,6 +77,16 @@ app.add_middleware(
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+# Cache-busting query param for static assets (?v=...) — computed once at
+# startup from style.css's mtime, which changes on every image rebuild
+# (COPY resets file times) even when its content didn't change. Without
+# this, browsers can keep serving an old cached CSS/JS file indefinitely
+# after a deploy since /static/* has no other versioning.
+try:
+    ASSET_VERSION = str(int(os.path.getmtime("app/static/css/style.css")))
+except OSError:
+    ASSET_VERSION = "1"
+
 def render(request: Request, template_name: str, *, force_lang: str = None, status_code: int = 200, **extra_context):
     had_cookie = request.cookies.get(LANG_COOKIE) in SUPPORTED_LANGUAGES
     lang = force_lang or resolve_lang(request)
@@ -85,6 +96,7 @@ def render(request: Request, template_name: str, *, force_lang: str = None, stat
         "lang": lang,
         "dir": "rtl" if lang == "fa" else "ltr",
         "t": lambda key, **kw: i18n.t(lang, key, **kw),
+        "asset_version": ASSET_VERSION,
         **extra_context,
     }
     response = templates.TemplateResponse(template_name, context, status_code=status_code)
