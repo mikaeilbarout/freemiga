@@ -174,26 +174,14 @@ class OrderOut(BaseModel):
 
 
 # ---- Support ----
-
-class TicketCreate(BaseModel):
-    subject: str
-    message: str
-
-
-class GuestTicketCreate(BaseModel):
-    username: str
-    contact: Optional[str] = None
-    subject: str
-    message: str
-
-
-class MessageCreate(BaseModel):
-    message: str
-
+# Ticket/message creation endpoints take multipart form fields (not these
+# models) since they accept an optional attachment — see routers/support.py
+# and routers/admin.py. These remain as the response-side shapes.
 
 class TicketMessageOut(BaseModel):
     sender: str
     body: str
+    attachment_path: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -204,6 +192,7 @@ class TicketOut(BaseModel):
     id: str
     subject: str
     status: str
+    customer_unread: bool
     created_at: datetime
     messages: list[TicketMessageOut]
 
@@ -256,6 +245,14 @@ class TicketAdminOut(BaseModel):
     id: str
     customer_id: str
     customer_username: str
+    guest_contact: Optional[str] = None
+    # Set only for guest tickets whose claimed username matches a real
+    # account — lets the admin cross-check the guest-supplied contact
+    # against the account's actual registered contact info before acting
+    # on the ticket (e.g. an unban/unlock request).
+    registered_email: Optional[str] = None
+    identity_mismatch: bool = False
+    needs_reply: bool
     subject: str
     status: str
     created_at: datetime

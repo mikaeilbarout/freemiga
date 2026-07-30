@@ -1,6 +1,3 @@
-import os
-import uuid
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
@@ -8,9 +5,7 @@ from app.auth import require_admin
 from app.database import get_db
 from app.models import Banner
 from app.schemas import BannerOut
-
-UPLOAD_DIR = "app/static/uploads/banners"
-MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
+from app.services.uploads import read_validated_image, save_image
 
 router = APIRouter(prefix="/api/banners", tags=["banners"])
 admin_router = APIRouter(
@@ -18,39 +13,12 @@ admin_router = APIRouter(
 )
 
 
-def _sniff_image_ext(data: bytes) -> str | None:
-    # Extension is derived from sniffed magic bytes, never from the
-    # client-supplied filename or Content-Type header (both attacker-
-    # controlled) — otherwise e.g. an SVG uploaded with a spoofed
-    # "image/png" Content-Type would be accepted and served by StaticFiles
-    # as image/svg+xml, a stored-XSS vector.
-    if data.startswith(b"\xff\xd8\xff"):
-        return ".jpg"
-    if data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return ".png"
-    if data.startswith((b"GIF87a", b"GIF89a")):
-        return ".gif"
-    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
-        return ".webp"
-    return None
+async def _read_validated_image(image: UploadFile) -> tuple[bytes, str]:
+    return await read_validated_image(image)
 
 
 def _save_image(data: bytes, ext: str) -> str:
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    filename = f"{uuid.uuid4().hex}{ext}"
-    with open(os.path.join(UPLOAD_DIR, filename), "wb") as f:
-        f.write(data)
-    return f"/static/uploads/banners/{filename}"
-
-
-async def _read_validated_image(image: UploadFile) -> tuple[bytes, str]:
-    data = await image.read()
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(400, "Image must be under 5 MB")
-    ext = _sniff_image_ext(data)
-    if ext is None:
-        raise HTTPException(400, "Image must be JPEG, PNG, WEBP, or GIF")
-    return data, ext
+    return save_image(data, ext, "banners")
 
 
 @router.get("", response_model=list[BannerOut])

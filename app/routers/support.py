@@ -1,56 +1,80 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app import i18n
 from app.auth import get_current_customer
 from app.database import get_db
 from app.lang import get_lang
+from app.limiter import limiter
 from app.models import Customer, SupportTicket, TicketMessage, TicketStatus
-from app.schemas import GuestTicketCreate, MessageCreate, TicketCreate, TicketOut
+from app.schemas import TicketOut
 from app.services import telegram
+from app.services.uploads import read_validated_image, save_image
 
 router = APIRouter(prefix="/api/support", tags=["support"])
 
 
+async def _save_attachment(attachment: UploadFile | None) -> str | None:
+    if attachment is None or not attachment.filename:
+        return None
+    data, ext = await read_validated_image(attachment)
+    return save_image(data, ext, "tickets")
+
+
 @router.post("/guest-tickets")
-async def create_guest_ticket(payload: GuestTicketCreate, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def create_guest_ticket(
+    request: Request,
+    username: str = Form(...),
+    contact: str | None = Form(None),
+    subject: str = Form(...),
+    message: str = Form(...),
+    attachment: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+):
     """
     Lets someone contact support without being logged in — mainly for
     'I'm locked out and can't reset my password' cases. Shows up in the
     admin panel same as normal tickets, just without a linked customer.
     """
+    attachment_path = await _save_attachment(attachment)
     ticket = SupportTicket(
-        guest_username=payload.username.strip().lower(),
-        guest_contact=payload.contact,
-        subject=payload.subject,
+        guest_username=username.strip().lower(),
+        guest_contact=contact,
+        subject=subject,
     )
     db.add(ticket)
     db.flush()
-    msg = TicketMessage(ticket_id=ticket.id, sender="customer", body=payload.message)
+    msg = TicketMessage(ticket_id=ticket.id, sender="customer", body=message, attachment_path=attachment_path)
     db.add(msg)
     db.commit()
 
     await telegram.notify_admin(
-        f"📩 پیام جدید (بدون ورود) از {ticket.guest_username}: {payload.subject}"
+        f"📩 New message (guest, not logged in) from {ticket.guest_username}: {subject}"
     )
     return {"ok": True}
 
 
 @router.post("/tickets", response_model=TicketOut)
+@limiter.limit("10/minute")
 async def create_ticket(
-    payload: TicketCreate,
+    request: Request,
+    subject: str = Form(...),
+    message: str = Form(...),
+    attachment: UploadFile | None = File(None),
     customer: Customer = Depends(get_current_customer),
     db: Session = Depends(get_db),
 ):
-    ticket = SupportTicket(customer_id=customer.id, subject=payload.subject)
+    attachment_path = await _save_attachment(attachment)
+    ticket = SupportTicket(customer_id=customer.id, subject=subject)
     db.add(ticket)
     db.flush()
-    msg = TicketMessage(ticket_id=ticket.id, sender="customer", body=payload.message)
+    msg = TicketMessage(ticket_id=ticket.id, sender="customer", body=message, attachment_path=attachment_path)
     db.add(msg)
     db.commit()
     db.refresh(ticket)
 
-    await telegram.notify_admin(f"📩 تیکت جدید از {customer.username}: {payload.subject}")
+    await telegram.notify_admin(f"📩 New ticket from {customer.username}: {subject}")
     return ticket
 
 
@@ -59,18 +83,42 @@ def my_tickets(
     customer: Customer = Depends(get_current_customer),
     db: Session = Depends(get_db),
 ):
-    return (
+    tickets = (
         db.query(SupportTicket)
         .filter(SupportTicket.customer_id == customer.id)
         .order_by(SupportTicket.created_at.desc())
         .all()
     )
+    # Fetching the list renders every message, so this doubles as "the
+    # customer has now seen any pending admin replies" — clears the badge
+    # that /unread-count reports.
+    if any(t.customer_unread for t in tickets):
+        for t in tickets:
+            t.customer_unread = False
+        db.commit()
+    return tickets
+
+
+@router.get("/unread-count")
+def unread_count(
+    customer: Customer = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+):
+    count = (
+        db.query(SupportTicket)
+        .filter(SupportTicket.customer_id == customer.id, SupportTicket.customer_unread.is_(True))
+        .count()
+    )
+    return {"count": count}
 
 
 @router.post("/tickets/{ticket_id}/messages", response_model=TicketOut)
+@limiter.limit("10/minute")
 async def reply_to_ticket(
+    request: Request,
     ticket_id: str,
-    payload: MessageCreate,
+    message: str = Form(...),
+    attachment: UploadFile | None = File(None),
     customer: Customer = Depends(get_current_customer),
     db: Session = Depends(get_db),
     lang: str = Depends(get_lang),
@@ -83,11 +131,12 @@ async def reply_to_ticket(
     if not ticket:
         raise HTTPException(404, i18n.t(lang, "err_ticket_not_found"))
 
-    msg = TicketMessage(ticket_id=ticket.id, sender="customer", body=payload.message)
+    attachment_path = await _save_attachment(attachment)
+    msg = TicketMessage(ticket_id=ticket.id, sender="customer", body=message, attachment_path=attachment_path)
     db.add(msg)
     ticket.status = TicketStatus.open
     db.commit()
     db.refresh(ticket)
 
-    await telegram.notify_admin(f"📩 پیام جدید تو تیکت «{ticket.subject}» از {customer.username}")
+    await telegram.notify_admin(f"📩 New message on ticket \"{ticket.subject}\" from {customer.username}")
     return ticket

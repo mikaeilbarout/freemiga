@@ -1,6 +1,6 @@
 import hmac
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -24,16 +24,24 @@ from app.schemas import (
     AdminLoginIn,
     BanIn,
     CustomerAdminOut,
-    MessageCreate,
     OrderOut,
     PlanCreate,
     PlanOut,
     PlanUpdate,
     TicketAdminOut,
 )
-from app.services import marzban, telegram
+from app.services import email_gateway, marzban, telegram
+from app.services.uploads import read_validated_image, save_image
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+def _mask_email(email: str) -> str:
+    local, _, domain = email.partition("@")
+    if not domain:
+        return email
+    visible = local[:1] or "*"
+    return f"{visible}{'*' * max(len(local) - 1, 1)}@{domain}"
 
 
 def _log_action(db: Session, action: str, target: str, detail: str = None) -> None:
@@ -271,12 +279,22 @@ def audit_log(db: Session = Depends(get_db), page: int = 1, page_size: int = 25)
 def list_tickets(
     db: Session = Depends(get_db),
     open_only: bool = False,
+    q: str | None = None,
     page: int = 1,
     page_size: int = 25,
 ):
     query = db.query(SupportTicket)
     if open_only:
         query = query.filter(SupportTicket.status == TicketStatus.open)
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.outerjoin(Customer, SupportTicket.customer_id == Customer.id).filter(
+            or_(
+                SupportTicket.subject.ilike(like),
+                SupportTicket.guest_username.ilike(like),
+                Customer.username.ilike(like),
+            )
+        )
     total = query.count()
     tickets = (
         query.order_by(SupportTicket.created_at.desc())
@@ -287,11 +305,31 @@ def list_tickets(
     out = []
     for t in tickets:
         display_name = t.customer.username if t.customer else f"{t.guest_username} (guest)"
+        needs_reply = bool(t.messages) and t.messages[-1].sender == "customer"
+
+        # A guest ticket's claimed identity is unverified — if the claimed
+        # username belongs to a real account, surface that account's actual
+        # registered email so the admin can spot an impersonation attempt
+        # (e.g. someone claiming to be another customer to get their ban lifted).
+        registered_email = None
+        identity_mismatch = False
+        if not t.customer and t.guest_username:
+            matched = db.query(Customer).filter(Customer.username == t.guest_username).first()
+            if matched and matched.email:
+                registered_email = _mask_email(matched.email)
+                claimed = (t.guest_contact or "").strip().lower()
+                known = {matched.email.strip().lower(), (matched.contact or "").strip().lower()}
+                identity_mismatch = bool(claimed) and claimed not in known
+
         out.append(
             TicketAdminOut(
                 id=t.id,
                 customer_id=t.customer_id or "",
                 customer_username=display_name,
+                guest_contact=t.guest_contact,
+                registered_email=registered_email,
+                identity_mismatch=identity_mismatch,
+                needs_reply=needs_reply,
                 subject=t.subject,
                 status=t.status,
                 created_at=t.created_at,
@@ -302,20 +340,44 @@ def list_tickets(
 
 
 @router.post("/tickets/{ticket_id}/reply", dependencies=[Depends(require_admin)])
-async def reply_ticket(ticket_id: str, payload: MessageCreate, db: Session = Depends(get_db)):
+async def reply_ticket(
+    ticket_id: str,
+    message: str = Form(...),
+    attachment: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+):
     ticket = db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(404, "Ticket not found")
-    msg = TicketMessage(ticket_id=ticket.id, sender="admin", body=payload.message)
+
+    attachment_path = None
+    if attachment is not None and attachment.filename:
+        data, ext = await read_validated_image(attachment)
+        attachment_path = save_image(data, ext, "tickets")
+
+    msg = TicketMessage(ticket_id=ticket.id, sender="admin", body=message, attachment_path=attachment_path)
     db.add(msg)
+    ticket.customer_unread = True
     db.commit()
     _log_action(db, "reply_ticket", ticket_id)
 
-    if ticket.customer and ticket.customer.telegram_chat_id:
-        await telegram.send_message(
-            ticket.customer.telegram_chat_id,
-            f"📩 Support replied to your ticket \"{ticket.subject}\" — check it on the site.",
-        )
+    if ticket.customer:
+        if ticket.customer.telegram_chat_id:
+            await telegram.send_message(
+                ticket.customer.telegram_chat_id,
+                f"📩 Support replied to your ticket \"{ticket.subject}\" — check it on the site.",
+            )
+        if ticket.customer.email:
+            try:
+                await email_gateway.send_support_reply_email(ticket.customer.email, ticket.subject)
+            except Exception:
+                pass
+    elif ticket.guest_contact and "@" in ticket.guest_contact:
+        try:
+            await email_gateway.send_support_reply_email(ticket.guest_contact, ticket.subject)
+        except Exception:
+            pass
+
     return {"ok": True}
 
 

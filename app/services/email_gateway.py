@@ -46,6 +46,24 @@ async def send_verification_email(to: str, verify_url: str) -> None:
     )
 
 
+async def send_support_reply_email(to: str, subject: str) -> None:
+    link = f"{settings.SITE_BASE_URL}/support"
+    await send_email(
+        to,
+        f"Support replied: {subject} — Freemiga",
+        f"""
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+          <h2>Support replied to your ticket</h2>
+          <p>Your ticket "{subject}" has a new reply from Freemiga support.</p>
+          <p style="margin:24px 0">
+            <a href="{link}" style="background:#7c5cff;color:#fff;padding:12px 24px;
+              border-radius:8px;text-decoration:none;font-weight:600">View reply</a>
+          </p>
+        </div>
+        """,
+    )
+
+
 async def send_password_reset_email(to: str, code: str) -> None:
     await send_email(
         to,

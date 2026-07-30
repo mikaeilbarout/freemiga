@@ -111,6 +111,7 @@
 
     <div id="tickets" style="display:none">
       <div class="list-toolbar">
+        <input type="text" id="ticketSearch" placeholder="Search username or subject…">
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);margin:0">
           <input type="checkbox" id="ticketOpenOnly" style="width:auto;margin:0" onchange="loadTickets()"> Open only
         </label>
@@ -282,15 +283,40 @@ async function confirmOrder(id) {
   loadOrders(true);
 }
 
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s == null ? '' : String(s);
+  return div.innerHTML;
+}
+
 function ticketCardHtml(t) {
+  const contactLine = t.customer_id
+    ? ''
+    : `<div class="row-meta" style="margin-top:4px">Guest contact: ${escapeHtml(t.guest_contact || '—')}</div>`;
+  const identityLine = t.registered_email
+    ? `<div class="row-meta" style="margin-top:2px${t.identity_mismatch ? ';color:var(--danger)' : ''}">
+         Registered account email: ${escapeHtml(t.registered_email)}${t.identity_mismatch ? ' — does not match the contact above, verify identity before acting on this ticket' : ''}
+       </div>`
+    : '';
   return `
-    <div class="card row-card">
+    <div class="card row-card"${t.needs_reply ? ' style="border-color:rgba(251,191,36,0.4)"' : ''}>
       <div class="row-top">
-        <div class="name">${t.customer_username} — ${t.subject}</div>
-        <span class="badge ${t.status === 'open' ? 'badge-warning' : 'badge-neutral'}">${t.status === 'open' ? 'Open' : 'Closed'}</span>
+        <div class="name">${escapeHtml(t.customer_username)} — ${escapeHtml(t.subject)}</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${t.needs_reply ? '<span class="badge badge-warning">Needs reply</span>' : ''}
+          <span class="badge ${t.status === 'open' ? 'badge-warning' : 'badge-neutral'}">${t.status === 'open' ? 'Open' : 'Closed'}</span>
+        </div>
       </div>
-      ${t.messages.map(m => `<div class="msg ${m.sender}">${m.body}</div>`).join('')}
+      ${contactLine}
+      ${identityLine}
+      ${t.messages.map(m => `
+        <div class="msg ${m.sender}">
+          ${escapeHtml(m.body)}
+          ${m.attachment_path ? `<a href="${m.attachment_path}" target="_blank" rel="noopener"><img src="${m.attachment_path}" style="max-width:220px;max-height:160px;border-radius:8px;display:block;margin-top:8px;border:1px solid var(--border)" alt=""></a>` : ''}
+        </div>
+      `).join('')}
       <textarea id="reply-${t.id}" rows="2" placeholder="Write a reply..." style="margin-top:10px"></textarea>
+      <input id="replyFile-${t.id}" type="file" accept="image/png,image/jpeg,image/webp,image/gif" style="margin-top:8px">
       <div class="actions">
         <button class="btn btn-primary btn-sm" onclick="replyTicket('${t.id}')">Send reply</button>
         ${t.status === 'open' ? `<button class="btn btn-ghost btn-sm" onclick="closeTicket('${t.id}')">Close ticket</button>` : ''}
@@ -299,10 +325,14 @@ function ticketCardHtml(t) {
   `;
 }
 
+let ticketSearchTimer = null;
+
 async function loadTickets(reset = true) {
   if (reset) { ticketPage = 1; }
   const openOnly = document.getElementById('ticketOpenOnly').checked;
+  const q = document.getElementById('ticketSearch').value.trim();
   const params = new URLSearchParams({page: ticketPage, page_size: PAGE_SIZE, open_only: openOnly});
+  if (q) params.set('q', q);
   const res = await fetch(`/api/admin/tickets?${params}`);
   if (!res.ok) return;
   const data = await res.json();
@@ -317,15 +347,21 @@ async function loadTickets(reset = true) {
   document.getElementById('ticketLoadMoreRow').style.display = ticketPage * PAGE_SIZE < data.total ? 'block' : 'none';
 }
 
+document.getElementById('ticketSearch').addEventListener('input', () => {
+  clearTimeout(ticketSearchTimer);
+  ticketSearchTimer = setTimeout(() => loadTickets(true), 350);
+});
+
 function loadMoreTickets() { ticketPage++; loadTickets(false); }
 
 async function replyTicket(id) {
   const message = document.getElementById(`reply-${id}`).value.trim();
   if (!message) return;
-  await fetch(`/api/admin/tickets/${id}/reply`, {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({message})
-  });
+  const form = new FormData();
+  form.set('message', message);
+  const file = document.getElementById(`replyFile-${id}`).files[0];
+  if (file) form.set('attachment', file);
+  await fetch(`/api/admin/tickets/${id}/reply`, { method: 'POST', body: form });
   loadTickets(true);
 }
 

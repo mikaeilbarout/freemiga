@@ -41,7 +41,7 @@ async def _provision(order: Order, db) -> None:
         db.commit()
         await _notify(
             telegram.notify_admin(
-                f"🔴 خطا در ساخت/تمدید اکانت برای {customer.username} (سفارش {order.id}) — چک کن."
+                f"🔴 Failed to create/renew account for {customer.username} (order {order.id}) — please check."
             ),
             "admin failure alert", order.id,
         )
@@ -63,9 +63,9 @@ async def _provision(order: Order, db) -> None:
         "marzban-guard device-limit push", order.id,
     )
 
-    kind_fa = "تمدید" if order.is_renewal else "خرید جدید"
+    kind = "Renewal" if order.is_renewal else "New purchase"
     await _notify(
-        telegram.notify_admin(f"💰 {kind_fa}: {customer.username} — {plan.name} ({plan.price_usdt}$)"),
+        telegram.notify_admin(f"💰 {kind}: {customer.username} — {plan.name} ({plan.price_usdt}$)"),
         "admin success alert", order.id,
     )
 

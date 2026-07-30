@@ -154,6 +154,9 @@ class SupportTicket(Base):
     guest_contact = Column(String, nullable=True)
     subject = Column(String, nullable=False)
     status = Column(Enum(TicketStatus), default=TicketStatus.open, nullable=False)
+    # Set when an admin replies, cleared when the customer next fetches their
+    # ticket list — drives the unread badge without a separate read-receipt table.
+    customer_unread = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     customer = relationship("Customer", back_populates="tickets")
@@ -169,6 +172,7 @@ class TicketMessage(Base):
     ticket_id = Column(String, ForeignKey("support_tickets.id"), nullable=False)
     sender = Column(String, nullable=False)  # "customer" or "admin"
     body = Column(Text, nullable=False)
+    attachment_path = Column(String, nullable=True)  # /static/uploads/tickets/...
     created_at = Column(DateTime, default=datetime.utcnow)
 
     ticket = relationship("SupportTicket", back_populates="messages")
