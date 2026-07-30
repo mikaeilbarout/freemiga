@@ -31,12 +31,12 @@
 </section>
 
 <section class="section">
-  <div class="card cta-band">
+  <div class="card cta-band" id="ctaBand">
     <div>
-      <h2>{{ t('plans_not_sure_h') }}</h2>
-      <p>{{ t('plans_not_sure_p') }}</p>
+      <h2 id="ctaBandH"></h2>
+      <p id="ctaBandP"></p>
     </div>
-    <a class="btn btn-primary" href="/signup">{{ t('cta_band_btn') }}</a>
+    <a class="btn btn-primary" href="/signup" id="ctaBandBtn"></a>
   </div>
 </section>
 
@@ -58,6 +58,12 @@ const PLANS_I18N = {
   empty: {{ t('plans_empty')|tojson }},
   loadError: {{ t('plans_load_error')|tojson }},
   pageOf: {{ t('plans_page_of', current='__CUR__', total='__TOT__')|tojson }},
+  notSureH: {{ t('plans_not_sure_h')|tojson }},
+  notSureP: {{ t('plans_not_sure_p')|tojson }},
+  ctaBandBtn: {{ t('cta_band_btn')|tojson }},
+  loggedInCtaH: {{ t('plans_loggedin_cta_h')|tojson }},
+  loggedInCtaP: {{ t('plans_loggedin_cta_p')|tojson }},
+  loggedInCtaBtn: {{ t('plans_loggedin_cta_btn')|tojson }},
 };
 
 const PLANS_PAGE_SIZE = 6;
@@ -141,6 +147,15 @@ async function loadPlans() {
 async function checkLoggedIn() {
   const res = await fetch('/api/auth/me');
   isLoggedIn = res.ok;
+  renderCtaBand();
+}
+
+function renderCtaBand() {
+  document.getElementById('ctaBandH').textContent = isLoggedIn ? PLANS_I18N.loggedInCtaH : PLANS_I18N.notSureH;
+  document.getElementById('ctaBandP').textContent = isLoggedIn ? PLANS_I18N.loggedInCtaP : PLANS_I18N.notSureP;
+  const btn = document.getElementById('ctaBandBtn');
+  btn.textContent = isLoggedIn ? PLANS_I18N.loggedInCtaBtn : PLANS_I18N.ctaBandBtn;
+  btn.href = isLoggedIn ? '/billing' : '/signup';
 }
 
 checkLoggedIn().then(loadPlans);
