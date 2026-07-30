@@ -2,6 +2,7 @@ import hmac
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.background import _provision
@@ -99,16 +100,25 @@ def delete_plan(plan_id: str, db: Session = Depends(get_db)):
     plan_name = plan.name
     has_orders = db.query(Order).filter(Order.plan_id == plan_id).first() is not None
 
-    if has_orders:
-        plan.is_active = False
-        db.commit()
-        _log_action(db, "deactivate_plan", plan_id, plan_name)
-        return {"ok": True, "deleted": False}
+    if not has_orders:
+        db.delete(plan)
+        try:
+            db.commit()
+        except IntegrityError:
+            # A customer's checkout raced us and created an order for this
+            # plan between our check above and this commit — fall through
+            # to deactivating it instead of surfacing a raw 500.
+            db.rollback()
+            has_orders = True
+        else:
+            _log_action(db, "delete_plan", plan_id, plan_name)
+            return {"ok": True, "deleted": True}
 
-    db.delete(plan)
+    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    plan.is_active = False
     db.commit()
-    _log_action(db, "delete_plan", plan_id, plan_name)
-    return {"ok": True, "deleted": True}
+    _log_action(db, "deactivate_plan", plan_id, plan_name)
+    return {"ok": True, "deleted": False}
 
 
 @router.get("/customers", dependencies=[Depends(require_admin)])
