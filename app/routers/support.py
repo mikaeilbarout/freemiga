@@ -83,20 +83,16 @@ def my_tickets(
     customer: Customer = Depends(get_current_customer),
     db: Session = Depends(get_db),
 ):
-    tickets = (
+    # Tickets render collapsed — a customer sees the subject/status list
+    # without necessarily opening any of them, so fetching this list must
+    # NOT clear customer_unread itself. See /tickets/{id}/mark-read, called
+    # only when a ticket is actually expanded.
+    return (
         db.query(SupportTicket)
         .filter(SupportTicket.customer_id == customer.id)
         .order_by(SupportTicket.created_at.desc())
         .all()
     )
-    # Fetching the list renders every message, so this doubles as "the
-    # customer has now seen any pending admin replies" — clears the badge
-    # that /unread-count reports.
-    if any(t.customer_unread for t in tickets):
-        for t in tickets:
-            t.customer_unread = False
-        db.commit()
-    return tickets
 
 
 @router.get("/unread-count")
@@ -110,6 +106,26 @@ def unread_count(
         .count()
     )
     return {"count": count}
+
+
+@router.post("/tickets/{ticket_id}/mark-read")
+def mark_ticket_read(
+    ticket_id: str,
+    customer: Customer = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+    lang: str = Depends(get_lang),
+):
+    ticket = (
+        db.query(SupportTicket)
+        .filter(SupportTicket.id == ticket_id, SupportTicket.customer_id == customer.id)
+        .first()
+    )
+    if not ticket:
+        raise HTTPException(404, i18n.t(lang, "err_ticket_not_found"))
+    if ticket.customer_unread:
+        ticket.customer_unread = False
+        db.commit()
+    return {"ok": True}
 
 
 @router.post("/tickets/{ticket_id}/messages", response_model=TicketOut)

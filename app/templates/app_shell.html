@@ -157,8 +157,7 @@
   .field-value { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; word-break: break-word; }
   .success-text { color: var(--success); font-size: 12.5px; margin-top: 8px; display: none; }
 
-  .ticket { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 12px; }
-  .ticket-subject { font-size: 13.5px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .ticket-block { margin-bottom: 10px; }
   .msg { font-size: 12.5px; padding: 9px 11px; border-radius: 8px; margin-bottom: 6px; line-height: 1.6; }
   .msg.customer { background: rgba(255,255,255,0.03); border: 1px solid var(--border); }
   .msg.admin { background: var(--accent-soft); border: 1px solid rgba(124,92,255,0.3); }
@@ -1071,6 +1070,7 @@ const SUPPORT_I18N = {
   noTickets: {{ t('support_no_tickets')|tojson }},
   replyPlaceholder: {{ t('support_reply_placeholder')|tojson }},
   replySend: {{ t('support_reply_send')|tojson }},
+  newReply: {{ t('support_new_reply_badge')|tojson }},
 };
 
 function escapeHtml(s) {
@@ -1079,31 +1079,66 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
+// Which tickets are expanded survives a re-render (sendTicket/sendTicketReply
+// both reload the whole list) so replying doesn't collapse the thread you're
+// looking at back under you.
+const openTicketIds = new Set();
+
 async function loadTickets() {
   const res = await fetch('/api/support/tickets');
   if (!res.ok) return;
   const tickets = await res.json();
   const container = document.getElementById('tickets');
-  container.innerHTML = tickets.map(t => `
-    <div class="ticket">
-      <div class="ticket-subject">${escapeHtml(t.subject)} <span class="badge ${t.status === 'open' ? 'badge-warning' : 'badge-neutral'}">${t.status === 'open' ? SUPPORT_I18N.open : SUPPORT_I18N.closed}</span></div>
-      ${t.messages.map(m => `
-        <div class="msg ${m.sender}">
-          ${escapeHtml(m.body)}
-          ${m.attachment_path ? `<a href="${m.attachment_path}" target="_blank" rel="noopener"><img src="${m.attachment_path}" class="msg-attachment" alt=""></a>` : ''}
+  container.innerHTML = tickets.map(t => {
+    const isOpen = openTicketIds.has(t.id);
+    return `
+    <div class="accordion-block ticket-block${isOpen ? ' open' : ''}">
+      <div class="accordion-header" onclick="toggleTicketAccordion(this, '${t.id}', ${t.customer_unread})">
+        <div class="accordion-title">${escapeHtml(t.subject)}</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${t.customer_unread ? `<span class="badge badge-warning ticket-unread-pill">${escapeHtml(SUPPORT_I18N.newReply)}</span>` : ''}
+          <span class="badge ${t.status === 'open' ? 'badge-warning' : 'badge-neutral'}">${t.status === 'open' ? SUPPORT_I18N.open : SUPPORT_I18N.closed}</span>
+          <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </div>
-      `).join('')}
-      ${t.status === 'open' ? `
-        <div class="ticket-reply-box">
-          <textarea id="reply-${t.id}" rows="2" placeholder="${escapeHtml(SUPPORT_I18N.replyPlaceholder)}"></textarea>
-          <input id="replyFile-${t.id}" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
-          <button class="btn btn-ghost btn-sm" onclick="sendTicketReply('${t.id}')">${escapeHtml(SUPPORT_I18N.replySend)}</button>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-body-inner">
+          ${t.messages.map(m => `
+            <div class="msg ${m.sender}">
+              ${escapeHtml(m.body)}
+              ${m.attachment_path ? `<a href="${m.attachment_path}" target="_blank" rel="noopener"><img src="${m.attachment_path}" class="msg-attachment" alt=""></a>` : ''}
+            </div>
+          `).join('')}
+          ${t.status === 'open' ? `
+            <div class="ticket-reply-box">
+              <textarea id="reply-${t.id}" rows="2" placeholder="${escapeHtml(SUPPORT_I18N.replyPlaceholder)}"></textarea>
+              <input id="replyFile-${t.id}" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+              <button class="btn btn-ghost btn-sm" onclick="sendTicketReply('${t.id}')">${escapeHtml(SUPPORT_I18N.replySend)}</button>
+            </div>
+          ` : ''}
         </div>
-      ` : ''}
+      </div>
     </div>
-  `).join('') || `<div class="empty-state">${SUPPORT_I18N.noTickets}</div>`;
-  const badge = document.getElementById('tabBadgeSupport');
-  if (badge) badge.style.display = 'none';
+  `;
+  }).join('') || `<div class="empty-state">${SUPPORT_I18N.noTickets}</div>`;
+  refreshOpenAccordions();
+}
+
+function toggleTicketAccordion(header, ticketId, wasUnread) {
+  const block = header.closest('.accordion-block');
+  const opening = !block.classList.contains('open');
+  block.classList.toggle('open');
+  syncAccordionHeight(block);
+  if (opening) {
+    openTicketIds.add(ticketId);
+    if (wasUnread) {
+      const pill = header.querySelector('.ticket-unread-pill');
+      if (pill) pill.remove();
+      fetch(`/api/support/tickets/${ticketId}/mark-read`, { method: 'POST' }).then(refreshSupportBadge);
+    }
+  } else {
+    openTicketIds.delete(ticketId);
+  }
 }
 
 async function sendTicket() {
@@ -1117,6 +1152,8 @@ async function sendTicket() {
   if (file) form.set('attachment', file);
   const res = await fetch('/api/support/tickets', { method: 'POST', body: form });
   if (res.ok) {
+    const created = await res.json();
+    openTicketIds.add(created.id);
     document.getElementById('ticketSubject').value = '';
     document.getElementById('ticketMessage').value = '';
     document.getElementById('ticketAttachment').value = '';
