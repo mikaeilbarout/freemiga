@@ -366,6 +366,10 @@ TEXT = {
         "terms_12_h": "12. Termination",
         "terms_12_p": "We may suspend or terminate any account at any time for violating these terms — without prior notice and without refund (see section 4) — and may refuse service to anyone at our discretion.",
 
+        "terms_group_billing": "Billing & payments",
+        "terms_group_aup": "Acceptable use policy",
+        "terms_group_aup_sub": "Required reading — this is what gets an account suspended.",
+
         "terms_agree_checkbox": "I have read and agree to the <a href=\"/terms#acceptable-use\" target=\"_blank\">Acceptable Use Policy</a>",
         "err_terms_not_accepted": "Please accept the Acceptable Use Policy before purchasing.",
 
@@ -782,6 +786,10 @@ TEXT = {
         "terms_11_p": "شما به‌تنهایی مسئول نحوه‌ی استفاده‌تان از این سرویس و رعایت قوانینی هستید که شامل حال شما می‌شوند. ما یک ابزار شبکه ارائه می‌دهیم؛ کاری که با آن انجام می‌دهید را تأیید، کنترل، یا مسئولیتش را قبول نمی‌کنیم. اگر استفاده‌تان شما را در معرض پیامدهای قانونی در حوزه‌ی قضایی خودتان قرار دهد، این موضوع بین شما و مراجع مربوطه است — ما هیچ‌گونه پوشش قانونی ارائه نمی‌دهیم.",
         "terms_12_h": "۱۲. فسخ حساب",
         "terms_12_p": "ما می‌توانیم هر حسابی را، در هر زمانی، به دلیل نقض این قوانین — بدون اطلاع قبلی و بدون بازپرداخت (بخش ۴ را ببینید) — تعلیق یا فسخ کنیم، و می‌توانیم به صلاحدید خودمان، خدمات را به هر کسی ارائه ندهیم.",
+
+        "terms_group_billing": "پرداخت و صورت‌حساب",
+        "terms_group_aup": "قوانین استفاده صحیح",
+        "terms_group_aup_sub": "خواندنش الزامیه — همینا باعث مسدود شدن حساب می‌شن.",
 
         "terms_agree_checkbox": "قوانین <a href=\"/terms#acceptable-use\" target=\"_blank\">استفاده صحیح</a> را خوانده‌ام و می‌پذیرم",
         "err_terms_not_accepted": "لطفاً قبل از خرید، قوانین استفاده صحیح را بپذیرید.",
