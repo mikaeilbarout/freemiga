@@ -33,6 +33,23 @@
     .app-sidebar-link { white-space: nowrap; }
   }
 
+  /* Collapsible sections within a panel — click a header to expand, so a
+     page with several settings blocks (e.g. Account) doesn't dump every
+     field on screen at once. */
+  .accordion-block { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; background: rgba(255,255,255,0.02); }
+  .accordion-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 16px 20px; cursor: pointer; user-select: none;
+  }
+  .accordion-header:hover { background: rgba(255,255,255,0.03); }
+  .accordion-title { font-size: 14px; font-weight: 600; }
+  .accordion-title .accordion-sub { font-weight: 400; color: var(--text-faint); font-size: 12px; margin-top: 2px; }
+  .accordion-chevron { width: 16px; height: 16px; flex: 0 0 16px; color: var(--text-dim); transition: transform 0.2s ease; }
+  .accordion-block.open .accordion-chevron { transform: rotate(180deg); }
+  .accordion-body { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+  .accordion-block.open .accordion-body { max-height: 1000px; }
+  .accordion-body-inner { padding: 0 20px 20px; border-top: 1px solid var(--border); padding-top: 18px; }
+
   .page-title { margin-bottom: 24px; }
   .page-title h1 { font-size: 20px; margin-bottom: 4px; }
   .page-title p { color: var(--text-dim); font-size: 13.5px; }
@@ -215,28 +232,38 @@
       </div>
       <div class="ban-notice" id="banNoticeBilling"></div>
 
-      <section class="block">
-        <div class="block-head"><h2>{{ t('available_plans') }}</h2></div>
-        <div class="card card-pad">
-          <div id="plans"></div>
-          <div class="row gap-8" style="flex-wrap:wrap">
-            <button class="btn btn-primary" id="buyCardBtn" disabled onclick="buyPlan('card')" style="display:none">{{ t('pay_card') }}</button>
-            <button class="btn btn-ghost" id="cryptoToggleBtn" disabled onclick="onCryptoBtnClick()" style="display:none">{{ t('pay_crypto') }}</button>
-            <button class="btn btn-primary" id="claimFreeBtn" disabled onclick="buyPlan('free')" style="display:none">{{ t('claim_free_plan') }}</button>
-          </div>
-          <div class="network-choice" id="cryptoNetworkChoice" style="display:none">
-            <div class="network-choice-label">{{ t('pay_crypto_choose_network') }}</div>
+      <section class="accordion-block open" data-block="plans">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <div class="accordion-title">{{ t('available_plans') }}</div>
+          <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="accordion-body">
+          <div class="accordion-body-inner">
+            <div id="plans"></div>
             <div class="row gap-8" style="flex-wrap:wrap">
-              <button class="btn btn-ghost btn-sm" id="buyCryptoTronBtn" onclick="buyPlan('crypto', 'tron')" style="display:none">{{ t('pay_crypto_tron') }}</button>
-              <button class="btn btn-ghost btn-sm" id="buyCryptoPolygonBtn" onclick="buyPlan('crypto', 'polygon')" style="display:none">{{ t('pay_crypto_polygon') }}</button>
+              <button class="btn btn-primary" id="buyCardBtn" disabled onclick="buyPlan('card')" style="display:none">{{ t('pay_card') }}</button>
+              <button class="btn btn-ghost" id="cryptoToggleBtn" disabled onclick="onCryptoBtnClick()" style="display:none">{{ t('pay_crypto') }}</button>
+              <button class="btn btn-primary" id="claimFreeBtn" disabled onclick="buyPlan('free')" style="display:none">{{ t('claim_free_plan') }}</button>
+            </div>
+            <div class="network-choice" id="cryptoNetworkChoice" style="display:none">
+              <div class="network-choice-label">{{ t('pay_crypto_choose_network') }}</div>
+              <div class="row gap-8" style="flex-wrap:wrap">
+                <button class="btn btn-ghost btn-sm" id="buyCryptoTronBtn" onclick="buyPlan('crypto', 'tron')" style="display:none">{{ t('pay_crypto_tron') }}</button>
+                <button class="btn btn-ghost btn-sm" id="buyCryptoPolygonBtn" onclick="buyPlan('crypto', 'polygon')" style="display:none">{{ t('pay_crypto_polygon') }}</button>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section class="block">
-        <div class="block-head"><h2>{{ t('order_history') }}</h2></div>
-        <div class="card card-pad" id="orders"><div class="empty-state">{{ t('no_orders_yet') }}</div></div>
+      <section class="accordion-block" data-block="order-history">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <div class="accordion-title">{{ t('order_history') }}</div>
+          <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="accordion-body">
+          <div class="accordion-body-inner" id="orders"><div class="empty-state">{{ t('no_orders_yet') }}</div></div>
+        </div>
       </section>
     </div>
 
@@ -247,69 +274,89 @@
         <p>{{ t('account_p') }}</p>
       </div>
 
-      <section class="block">
-        <div class="block-head"><h2>{{ t('account_profile') }}</h2></div>
-        <div class="card card-pad">
-          <div class="field-row">
-            <div>
-              <div class="field-label">{{ t('account_username_label') }}</div>
-              <div class="field-value" id="fUsername">—</div>
+      <section class="accordion-block open" data-block="profile">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <div class="accordion-title">{{ t('account_profile') }}</div>
+          <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="accordion-body">
+          <div class="accordion-body-inner">
+            <div class="field-row">
+              <div>
+                <div class="field-label">{{ t('account_username_label') }}</div>
+                <div class="field-value" id="fUsername">—</div>
+              </div>
+              <span class="faint" style="font-size:12px">{{ t('account_username_locked') }}</span>
             </div>
-            <span class="faint" style="font-size:12px">{{ t('account_username_locked') }}</span>
-          </div>
-          <div class="field-row">
-            <div>
-              <div class="field-label">{{ t('account_email_label') }}</div>
-              <div class="field-value" id="fEmail">—</div>
+            <div class="field-row">
+              <div>
+                <div class="field-label">{{ t('account_email_label') }}</div>
+                <div class="field-value" id="fEmail">—</div>
+              </div>
+              <span id="emailBadge"></span>
             </div>
-            <span id="emailBadge"></span>
-          </div>
-          <div style="padding-top:14px" id="resendRow">
-            <button class="btn btn-ghost btn-sm" onclick="resendVerification()" id="resendBtn">{{ t('account_resend_btn') }}</button>
-          </div>
+            <div style="padding-top:14px" id="resendRow">
+              <button class="btn btn-ghost btn-sm" onclick="resendVerification()" id="resendBtn">{{ t('account_resend_btn') }}</button>
+            </div>
 
-          <label for="contact" style="margin-top:18px">{{ t('account_telegram_label') }}</label>
-          <input id="contact" placeholder="@yourhandle">
-          <button class="btn btn-ghost btn-sm" onclick="saveContact()">{{ t('account_save') }}</button>
-          <div class="success-text" id="contactSaved">{{ t('account_saved') }}</div>
+            <label for="contact" style="margin-top:18px">{{ t('account_telegram_label') }}</label>
+            <input id="contact" placeholder="@yourhandle">
+            <button class="btn btn-ghost btn-sm" onclick="saveContact()">{{ t('account_save') }}</button>
+            <div class="success-text" id="contactSaved">{{ t('account_saved') }}</div>
+          </div>
         </div>
       </section>
 
-      <section class="block" id="telegramSection" style="display:none">
-        <div class="block-head"><h2>{{ t('account_telegram_section_h') }}</h2></div>
-        <div class="card card-pad" id="telegramStatus" style="font-size:13.5px;color:var(--text-dim);line-height:1.7"></div>
-      </section>
-
-      <section class="block">
-        <div class="block-head"><h2>{{ t('account_change_password') }}</h2></div>
-        <div class="card card-pad">
-          <label for="currentPassword">{{ t('account_current_password') }}</label>
-          <input id="currentPassword" type="password" autocomplete="current-password">
-          <label for="newPassword">{{ t('account_new_password') }} <span class="faint">{{ t('account_new_password_hint') }}</span></label>
-          <input id="newPassword" type="password" autocomplete="new-password" minlength="6">
-          <label for="confirmNewPassword">{{ t('account_confirm_new_password') }}</label>
-          <input id="confirmNewPassword" type="password" autocomplete="new-password" minlength="6">
-          <button class="btn btn-primary" onclick="changePassword()">{{ t('account_update_password') }}</button>
-          <div class="field-error" id="passwordErr"></div>
-          <div class="success-text" id="passwordSaved">{{ t('account_password_updated') }}</div>
+      <section class="accordion-block" data-block="telegram" id="telegramSection" style="display:none">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <div class="accordion-title">{{ t('account_telegram_section_h') }}</div>
+          <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="accordion-body">
+          <div class="accordion-body-inner" id="telegramStatus" style="font-size:13.5px;color:var(--text-dim);line-height:1.7"></div>
         </div>
       </section>
 
-      <section class="block">
-        <div class="block-head"><h2>{{ t('account_danger_zone') }}</h2></div>
-        <div class="card card-pad" style="border-color:rgba(251,113,133,0.35)">
-          <div id="deleteIntro">
-            <p style="color:var(--text-dim);font-size:13.5px;line-height:1.7;margin-bottom:16px">{{ t('account_delete_intro') }}</p>
-            <button class="btn btn-danger" onclick="showDeleteConfirm()">{{ t('account_delete_btn') }}</button>
+      <section class="accordion-block" data-block="password">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <div class="accordion-title">{{ t('account_change_password') }}</div>
+          <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="accordion-body">
+          <div class="accordion-body-inner">
+            <label for="currentPassword">{{ t('account_current_password') }}</label>
+            <input id="currentPassword" type="password" autocomplete="current-password">
+            <label for="newPassword">{{ t('account_new_password') }} <span class="faint">{{ t('account_new_password_hint') }}</span></label>
+            <input id="newPassword" type="password" autocomplete="new-password" minlength="6">
+            <label for="confirmNewPassword">{{ t('account_confirm_new_password') }}</label>
+            <input id="confirmNewPassword" type="password" autocomplete="new-password" minlength="6">
+            <button class="btn btn-primary" onclick="changePassword()">{{ t('account_update_password') }}</button>
+            <div class="field-error" id="passwordErr"></div>
+            <div class="success-text" id="passwordSaved">{{ t('account_password_updated') }}</div>
           </div>
-          <div id="deleteConfirmBox" style="display:none">
-            <p style="color:var(--danger);font-size:13.5px;line-height:1.7;margin-bottom:14px;font-weight:600">{{ t('account_delete_warning') }}</p>
-            <label for="deletePassword">{{ t('account_delete_password_label') }}</label>
-            <input id="deletePassword" type="password" autocomplete="current-password">
-            <div class="field-error" id="deleteErr"></div>
-            <div class="row gap-8">
-              <button class="btn btn-danger" onclick="confirmDeleteAccount()">{{ t('account_delete_confirm_btn') }}</button>
-              <button class="btn btn-ghost" onclick="hideDeleteConfirm()">{{ t('account_delete_cancel') }}</button>
+        </div>
+      </section>
+
+      <section class="accordion-block" data-block="danger" style="border-color:rgba(251,113,133,0.35)">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <div class="accordion-title" style="color:var(--danger)">{{ t('account_danger_zone') }}</div>
+          <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="accordion-body">
+          <div class="accordion-body-inner">
+            <div id="deleteIntro">
+              <p style="color:var(--text-dim);font-size:13.5px;line-height:1.7;margin-bottom:16px">{{ t('account_delete_intro') }}</p>
+              <button class="btn btn-danger" onclick="showDeleteConfirm()">{{ t('account_delete_btn') }}</button>
+            </div>
+            <div id="deleteConfirmBox" style="display:none">
+              <p style="color:var(--danger);font-size:13.5px;line-height:1.7;margin-bottom:14px;font-weight:600">{{ t('account_delete_warning') }}</p>
+              <label for="deletePassword">{{ t('account_delete_password_label') }}</label>
+              <input id="deletePassword" type="password" autocomplete="current-password">
+              <div class="field-error" id="deleteErr"></div>
+              <div class="row gap-8">
+                <button class="btn btn-danger" onclick="confirmDeleteAccount()">{{ t('account_delete_confirm_btn') }}</button>
+                <button class="btn btn-ghost" onclick="hideDeleteConfirm()">{{ t('account_delete_cancel') }}</button>
+              </div>
             </div>
           </div>
         </div>
@@ -367,6 +414,10 @@ window.addEventListener('popstate', e => {
 });
 
 activateSection(INITIAL_SECTION);
+
+function toggleAccordion(header) {
+  header.closest('.accordion-block').classList.toggle('open');
+}
 
 // ===================== Overview =====================
 const DASH_I18N = {
