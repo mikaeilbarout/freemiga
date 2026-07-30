@@ -17,8 +17,11 @@ class Customer(Base):
 
     id = Column(String, primary_key=True, default=gen_id)
     username = Column(String, unique=True, nullable=False)  # also the Marzban username
-    # Nullable: accounts created entirely through the Telegram bot have no
-    # email — Telegram itself (a live chat_id) is their trust signal instead.
+    # Nullable only for accounts created before the bot started collecting
+    # email at signup — those were grandfathered in as email_verified=True
+    # (a live chat_id was their trust signal instead). New signups, whether
+    # via the website or the Telegram bot, always provide an email and must
+    # verify it before their first purchase.
     email = Column(String, unique=True, nullable=True)
     email_verified = Column(Boolean, default=False)
     password_hash = Column(String, nullable=False)

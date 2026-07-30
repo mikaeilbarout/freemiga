@@ -1,22 +1,28 @@
 """
 The interactive Telegram bot experience — language selection, browsing
-plans, creating an account entirely in-chat, and paying (via a button that
-opens the same hosted Stripe/NowPayments checkout page the website uses).
+plans, creating an account entirely in-chat (username + email), and paying
+(via a button that opens the same hosted Stripe/NowPayments checkout page
+the website uses). A purchase can't be completed until the account's email
+is verified — the same rule the website enforces in routers/orders.py.
 
 Conversation state for flows that span multiple messages (choosing a
-username, writing a support message) is kept in an in-memory dict keyed by
-chat_id. It's ephemeral by design — if the process restarts mid-flow, the
-customer just sends /start again. Nothing valuable is lost since no Order
-or Customer row is written until the flow actually completes.
+username, entering an email, writing a support message) is kept in an
+in-memory dict keyed by chat_id. It's ephemeral by design — if the process
+restarts mid-flow, the customer just sends /start again. Nothing valuable
+is lost since no Order or Customer row is written until username+email are
+both collected.
 """
 import logging
+import re
 import secrets
 from datetime import datetime, timedelta
 
 from app.auth import hash_password
 from app.config import settings
 from app.models import Customer, Order, OrderStatus, PaymentMethod, Plan, SupportTicket, TicketMessage
-from app.services import order_service, polygon_gateway, stripe_gateway, telegram, tron_gateway
+from app.services import order_service, polygon_gateway, stripe_gateway, telegram, tron_gateway, verification
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _crypto_configured() -> bool:
@@ -37,8 +43,21 @@ TEXT = {
         "ask_username": "Let's set up your account. Please choose a username (3-20 letters/numbers, no spaces):",
         "username_taken": "That username is already taken. Please try a different one:",
         "username_invalid": "Usernames may only contain 3-20 letters/numbers, with no spaces. Please try again:",
+        "ask_email": "Almost done — please enter your email address. We'll send you a verification link, "
+        "and you'll need to verify it before you can complete a purchase:",
+        "email_invalid": "That doesn't look like a valid email address. Please try again:",
+        "email_taken": "An account with this email already exists. Please enter a different email address:",
         "account_created": "✅ Your account has been created! Your username is \"{username}\". "
         "Whenever you'd like, you can set a password from the website (Account → \"Forgot password\").",
+        "verification_sent": "📧 We've sent a verification link to {email}. Please check your inbox (and spam "
+        "folder) and tap the link. We'll let you know right here as soon as it's verified — then you can "
+        "complete your purchase.",
+        "verify_email_first": "✉️ Please verify your email before completing a purchase. We sent a link to "
+        "{email} — check your inbox (and spam folder), or tap below to resend it.",
+        "resend_verification": "📧 Resend verification email",
+        "verification_resent": "✅ A new verification email has been sent — please check your inbox.",
+        "already_verified": "Your email is already verified.",
+        "email_verified_notice": "✅ Your email has been verified! You can now complete your purchase.",
         "choose_payment": "How would you like to pay for {plan_name} (${price})?",
         "pay_card": "💳 Pay with card",
         "pay_crypto": "🪙 Pay with crypto",
@@ -78,8 +97,20 @@ TEXT = {
         "ask_username": "بریم حسابتون رو بسازیم. لطفاً یه یوزرنیم انتخاب کنید (۳ تا ۲۰ حرف/عدد انگلیسی، بدون فاصله):",
         "username_taken": "این یوزرنیم قبلاً انتخاب شده. لطفاً یوزرنیم دیگه‌ای وارد کنید:",
         "username_invalid": "یوزرنیم فقط می‌تونه شامل ۳ تا ۲۰ حرف/عدد انگلیسی باشه، بدون فاصله. لطفاً دوباره امتحان کنید:",
+        "ask_email": "یک قدم دیگه مونده — لطفاً ایمیل‌تون رو وارد کنید. یک لینک تأیید براتون می‌فرستیم و "
+        "قبل از تکمیل خرید باید تأییدش کنید:",
+        "email_invalid": "این یک آدرس ایمیل معتبر به نظر نمی‌رسه. لطفاً دوباره امتحان کنید:",
+        "email_taken": "حسابی با این ایمیل قبلاً وجود داره. لطفاً یک ایمیل دیگه وارد کنید:",
         "account_created": "✅ حساب شما با موفقیت ساخته شد! یوزرنیم‌تون «{username}» هست. "
         "هر وقت مایل بودید، می‌تونید از سایت (Account → Forgot password) یه رمز عبور تنظیم کنید.",
+        "verification_sent": "📧 یک لینک تأیید به {email} فرستادیم. لطفاً صندوق ایمیل‌تون (و پوشه اسپم) رو "
+        "چک کنید و روی لینک بزنید. به‌محض تأیید، همین‌جا بهتون خبر می‌دیم — بعدش می‌تونید خریدتون رو تکمیل کنید.",
+        "verify_email_first": "✉️ لطفاً قبل از تکمیل خرید، ایمیل‌تون رو تأیید کنید. یک لینک به {email} فرستادیم — "
+        "صندوق ایمیل (و پوشه اسپم) رو چک کنید، یا پایین بزنید تا دوباره ارسال بشه.",
+        "resend_verification": "📧 ارسال دوباره ایمیل تأیید",
+        "verification_resent": "✅ یک ایمیل تأیید جدید فرستاده شد — لطفاً صندوقتون رو چک کنید.",
+        "already_verified": "ایمیل شما قبلاً تأیید شده.",
+        "email_verified_notice": "✅ ایمیل شما تأیید شد! حالا می‌تونید خریدتون رو تکمیل کنید.",
         "choose_payment": "پلن {plan_name} (${price}) رو چطور مایلید پرداخت کنید؟",
         "pay_card": "💳 پرداخت با کارت",
         "pay_crypto": "🪙 پرداخت با کریپتو",
@@ -213,7 +244,18 @@ async def _show_support(chat_id: str, lang: str) -> None:
     await telegram.send_message(chat_id, text, reply_markup=_support_kb(lang))
 
 
-async def _show_payment_choice(chat_id: str, lang: str, plan: Plan) -> None:
+def _verify_email_kb(lang: str) -> dict:
+    return _kb([[{"text": _t(lang, "resend_verification"), "callback_data": "resendverify"}]])
+
+
+async def _show_payment_choice(chat_id: str, lang: str, plan: Plan, customer: Customer | None = None) -> None:
+    if customer and not customer.email_verified:
+        await telegram.send_message(
+            chat_id,
+            _t(lang, "verify_email_first", email=customer.email or ""),
+            reply_markup=_verify_email_kb(lang),
+        )
+        return
     if not stripe_gateway.is_configured() and not _crypto_configured():
         await telegram.send_message(chat_id, _t(lang, "no_payment_methods"))
         return
@@ -255,6 +297,14 @@ async def _start_order(db, chat_id: str, lang: str, customer: Customer, plan_id:
 
     if customer.is_banned:
         await telegram.send_message(chat_id, _t(lang, "banned", reason=customer.ban_reason or "—"))
+        return
+
+    if not customer.email_verified:
+        await telegram.send_message(
+            chat_id,
+            _t(lang, "verify_email_first", email=customer.email or ""),
+            reply_markup=_verify_email_kb(lang),
+        )
         return
 
     pending = (
@@ -322,6 +372,10 @@ async def _handle_text_message(db, chat_id: str, text: str) -> None:
         await _handle_username_reply(db, chat_id, lang, text.strip())
         return
 
+    if state == "awaiting_email":
+        await _handle_email_reply(db, chat_id, lang, text.strip())
+        return
+
     if state == "awaiting_support":
         await _handle_support_reply(db, chat_id, lang, customer, text.strip())
         return
@@ -368,10 +422,35 @@ async def _handle_username_reply(db, chat_id: str, lang: str, username: str) -> 
         await telegram.send_message(chat_id, _t(lang, "username_taken"))
         return
 
+    session["username"] = normalized
+    session["state"] = "awaiting_email"
+    await telegram.send_message(chat_id, _t(lang, "ask_email"))
+
+
+async def _handle_email_reply(db, chat_id: str, lang: str, email: str) -> None:
+    session = _sessions[chat_id]
+    normalized = email.strip().lower()
+
+    if not _EMAIL_RE.match(normalized):
+        await telegram.send_message(chat_id, _t(lang, "email_invalid"))
+        return
+
+    if db.query(Customer).filter(Customer.email == normalized).first():
+        await telegram.send_message(chat_id, _t(lang, "email_taken"))
+        return
+
+    username = session.get("username")
+    if not username or db.query(Customer).filter(Customer.username == username).first():
+        # Username got taken by someone else meanwhile (or the session lost
+        # it, e.g. process restart) — restart the signup from the top.
+        session["state"] = "awaiting_username"
+        await telegram.send_message(chat_id, _t(lang, "ask_username"))
+        return
+
     customer = Customer(
-        username=normalized,
-        email=None,
-        email_verified=True,  # a live Telegram chat is this account's trust signal
+        username=username,
+        email=normalized,
+        email_verified=False,
         password_hash=hash_password(secrets.token_urlsafe(16)),
         telegram_chat_id=chat_id,
         language=lang,
@@ -380,14 +459,16 @@ async def _handle_username_reply(db, chat_id: str, lang: str, username: str) -> 
     db.commit()
     db.refresh(customer)
 
-    await telegram.send_message(chat_id, _t(lang, "account_created", username=normalized))
+    await telegram.send_message(chat_id, _t(lang, "account_created", username=username))
+    await verification.send_verification_email(db, customer)
+    await telegram.send_message(chat_id, _t(lang, "verification_sent", email=customer.email))
 
-    plan_id = session.get("plan_id")
     session["state"] = None
+    plan_id = session.get("plan_id")
     if plan_id:
         plan = db.query(Plan).filter(Plan.id == plan_id).first()
         if plan:
-            await _show_payment_choice(chat_id, lang, plan)
+            await _show_payment_choice(chat_id, lang, plan, customer)
             return
     await _show_main_menu(chat_id, lang, "welcome_back")
 
@@ -474,11 +555,19 @@ async def _handle_callback(db, callback_query: dict) -> None:
         if customer:
             plan = db.query(Plan).filter(Plan.id == plan_id).first()
             if plan:
-                await _show_payment_choice(chat_id, lang, plan)
+                await _show_payment_choice(chat_id, lang, plan, customer)
         else:
             session["state"] = "awaiting_username"
             session["plan_id"] = plan_id
             await telegram.send_message(chat_id, _t(lang, "ask_username"))
+        return
+
+    if data == "resendverify":
+        if customer and customer.email and not customer.email_verified:
+            await verification.send_verification_email(db, customer)
+            await telegram.send_message(chat_id, _t(lang, "verification_resent"))
+        elif customer and customer.email_verified:
+            await telegram.send_message(chat_id, _t(lang, "already_verified"))
         return
 
     if data.startswith("pay:"):
@@ -506,11 +595,25 @@ async def _handle_callback(db, callback_query: dict) -> None:
                 await telegram.send_message(chat_id, _t(lang, "order_cancelled"))
         plan = db.query(Plan).filter(Plan.id == plan_id).first()
         if plan:
-            await _show_payment_choice(chat_id, lang, plan)
+            await _show_payment_choice(chat_id, lang, plan, customer)
         return
 
 
 # ---------- Entry point ----------
+
+async def notify_email_verified(customer: Customer) -> None:
+    """Called from the web /api/auth/verify-email route once a customer's
+    email is confirmed, so a bot signup that's mid-flow (paused waiting on
+    verification) hears about it and can go complete their purchase."""
+    if not customer.telegram_chat_id:
+        return
+    lang = customer.language or "en"
+    await telegram.send_message(
+        customer.telegram_chat_id,
+        _t(lang, "email_verified_notice"),
+        reply_markup=_kb([[{"text": _t(lang, "menu_plans"), "callback_data": "menu:plans"}]]),
+    )
+
 
 async def handle_update(update: dict, db) -> None:
     try:

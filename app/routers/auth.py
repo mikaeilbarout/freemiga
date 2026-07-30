@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app import i18n
 from app.auth import get_current_customer, hash_password, verify_password
-from app.config import settings
 from app.database import get_db
 from app.lang import get_lang
 from app.limiter import limiter
@@ -24,29 +23,11 @@ from app.schemas import (
     SignupIn,
     UpdateProfileIn,
 )
-from app.services import email_gateway, marzban, telegram
+from app.services import email_gateway, marzban, telegram, telegram_bot, verification
 
 logger = logging.getLogger("auth")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-
-
-async def _send_verification_email(db: Session, customer: Customer) -> None:
-    """Best-effort — a failure here (e.g. the email provider rejects the
-    address) must never block signup/login, since the account already
-    exists. The customer can always retry via "Resend email" in the dashboard."""
-    token = secrets.token_urlsafe(32)
-    db.add(EmailVerificationToken(
-        customer_id=customer.id,
-        token=token,
-        expires_at=datetime.utcnow() + timedelta(hours=24),
-    ))
-    db.commit()
-    verify_url = f"{settings.SITE_BASE_URL}/api/auth/verify-email?token={token}"
-    try:
-        await email_gateway.send_verification_email(customer.email, verify_url)
-    except Exception:
-        logger.exception("Failed to send verification email to %s", customer.email)
 
 
 @router.post("/signup", response_model=CustomerOut)
@@ -67,14 +48,14 @@ async def signup(payload: SignupIn, request: Request, db: Session = Depends(get_
     db.commit()
     db.refresh(customer)
 
-    await _send_verification_email(db, customer)
+    await verification.send_verification_email(db, customer)
 
     request.session["customer_id"] = customer.id
     return customer
 
 
 @router.get("/verify-email")
-def verify_email(token: str, db: Session = Depends(get_db)):
+async def verify_email(token: str, db: Session = Depends(get_db)):
     record = db.query(EmailVerificationToken).filter(EmailVerificationToken.token == token).first()
     if not record:
         return RedirectResponse(url="/dashboard?verify=invalid")
@@ -97,6 +78,10 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     if customer:
         customer.email_verified = True
     db.commit()
+
+    if customer:
+        await telegram_bot.notify_email_verified(customer)
+
     return RedirectResponse(url="/dashboard?verify=success")
 
 
@@ -109,7 +94,7 @@ async def resend_verification(
 ):
     if customer.email_verified:
         return {"already_verified": True}
-    await _send_verification_email(db, customer)
+    await verification.send_verification_email(db, customer)
     return {"sent": True}
 
 
