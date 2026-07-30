@@ -25,18 +25,20 @@
 
   @media (max-width: 860px) {
     .app-shell { flex-direction: column; padding: 16px 16px 100px; gap: 16px; }
+    /* An even 4-column grid instead of a scrolling row — all four
+       sections stay equally sized and visible at once, no fade/scroll
+       hint needed. */
     .app-sidebar {
-      position: sticky; top: 63px; z-index: 30; flex: none; flex-direction: row; gap: 4px;
-      width: 100%; overflow-x: auto; background: rgba(5, 6, 10, 0.85); backdrop-filter: blur(12px);
+      position: sticky; top: 63px; z-index: 30; flex: none;
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+      width: 100%; background: rgba(5, 6, 10, 0.85); backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border); padding: 8px 0; margin: 0 -16px; padding-inline: 16px;
-      /* Fades the trailing edge so a tab bar with more items than fit
-         (Overview/Billing/Account/Support/...) reads as "swipe for more"
-         instead of looking like it's just cut off. */
-      -webkit-mask-image: linear-gradient(to var(--rtl-fade-dir, right), black calc(100% - 28px), transparent 100%);
-      mask-image: linear-gradient(to var(--rtl-fade-dir, right), black calc(100% - 28px), transparent 100%);
     }
-    html[dir="rtl"] .app-sidebar { --rtl-fade-dir: left; }
-    .app-sidebar-link { white-space: nowrap; }
+    .app-sidebar-link {
+      flex-direction: column; justify-content: center; gap: 5px;
+      padding: 8px 2px; font-size: 11px; text-align: center; white-space: nowrap;
+    }
+    .app-sidebar-link .si-icon { width: 18px; height: 18px; flex: 0 0 18px; margin: 0 auto; }
   }
 
   /* Collapsible sections within a panel — click a header to expand, so a

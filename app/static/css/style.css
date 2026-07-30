@@ -215,6 +215,12 @@ p {
   border-color: var(--border-strong);
 }
 
+/* Logged-in nav identity: full name link on desktop, collapses to a
+   circular avatar (see mobile override below) so it can't overflow. */
+.nav-user-link { display: flex; align-items: center; gap: 8px; }
+.nav-user-avatar { display: none; }
+.nav-logout-icon { display: none; }
+
 /* ---------- Buttons ---------- */
 
 .btn {
@@ -439,15 +445,27 @@ input:focus, textarea:focus, select:focus {
 
 @media (max-width: 720px) {
   .nav-links { display: none; }
-  /* Found live: a longer username (nav.js renders it as a link — up to
-     20 chars, this app's own max) plus the lang pill and Log out button
-     can push the header a few px past the viewport at narrow widths.
-     Truncate the username specifically rather than letting the row
-     overflow — it's decorative context here (a link back to /dashboard),
-     not something that needs to stay fully readable in the header. */
-  #navAuthSlot a.btn-ghost {
-    max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* A username of any length plus the lang pill and auth controls
+     don't fit on one line at narrow widths — rather than let them wrap
+     into a lopsided stack, shrink the logo to its mark and collapse
+     the logged-in identity/logout controls into two matching circular
+     icon buttons, so the whole row stays on one line and balanced. */
+  .brand-name { display: none; }
+  .nav-actions { gap: 8px; }
+  #navAuthSlot { display: flex; align-items: center; gap: 8px; }
+  #navAuthSlot .btn.btn-sm { padding: 7px 13px; font-size: 12.5px; }
+
+  .nav-user-link, .nav-logout-btn {
+    width: 34px; height: 34px; padding: 0 !important; border-radius: 50%;
   }
+  .nav-user-name, .nav-logout-text { display: none; }
+  .nav-user-avatar {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100%; border-radius: 50%;
+    background: var(--gradient); color: #05060a; font-weight: 800; font-size: 13px;
+  }
+  .nav-logout-btn { display: inline-flex; align-items: center; justify-content: center; }
+  .nav-logout-icon { display: block; width: 16px; height: 16px; }
 }
 
 /* ---------- Marketing page sections (home, plans, how-it-works, features) ---------- */
