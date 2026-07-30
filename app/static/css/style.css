@@ -439,6 +439,15 @@ input:focus, textarea:focus, select:focus {
 
 @media (max-width: 720px) {
   .nav-links { display: none; }
+  /* Found live: a longer username (nav.js renders it as a link — up to
+     20 chars, this app's own max) plus the lang pill and Log out button
+     can push the header a few px past the viewport at narrow widths.
+     Truncate the username specifically rather than letting the row
+     overflow — it's decorative context here (a link back to /dashboard),
+     not something that needs to stay fully readable in the header. */
+  #navAuthSlot a.btn-ghost {
+    max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
 }
 
 /* ---------- Marketing page sections (home, plans, how-it-works, features) ---------- */
