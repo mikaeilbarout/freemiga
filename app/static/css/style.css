@@ -248,17 +248,20 @@ p {
   transform: translateY(-1px);
 }
 
-.btn-primary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  box-shadow: none;
-  transform: none;
-}
-
 .btn-ghost {
   background: transparent;
   border-color: var(--border);
   color: var(--text);
+}
+
+/* Applies to every variant (primary, ghost, danger) — previously only
+   .btn-primary had a :disabled rule, so a disabled .btn-ghost (e.g. the
+   crypto payment button) gave no visual sign it was disabled at all. */
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 .btn-ghost:hover {
