@@ -715,6 +715,10 @@ function selectPlan(id) {
     cryptoToggleBtn.disabled = false;
     freeBtn.disabled = false;
   }
+  // Showing/hiding the payment buttons above changes this accordion's
+  // content height — re-sync or they clip at whatever height was cached
+  // from before this selection (see the same fix on loadPlans/loadAllOrders).
+  refreshOpenAccordions();
 }
 
 function onCryptoBtnClick() {
@@ -726,6 +730,7 @@ function onCryptoBtnClick() {
   }
   const panel = document.getElementById('cryptoNetworkChoice');
   panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+  refreshOpenAccordions();
 }
 
 async function loadPlans() {
@@ -952,12 +957,14 @@ async function loadTelegramStatus() {
 function showDeleteConfirm() {
   document.getElementById('deleteIntro').style.display = 'none';
   document.getElementById('deleteConfirmBox').style.display = 'block';
+  refreshOpenAccordions();
 }
 function hideDeleteConfirm() {
   document.getElementById('deleteIntro').style.display = 'block';
   document.getElementById('deleteConfirmBox').style.display = 'none';
   document.getElementById('deletePassword').value = '';
   document.getElementById('deleteErr').style.display = 'none';
+  refreshOpenAccordions();
 }
 
 async function confirmDeleteAccount() {
