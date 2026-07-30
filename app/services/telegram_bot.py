@@ -82,6 +82,7 @@ TEXT = {
         "menu_plans": "🛒 Plans & Pricing",
         "menu_orders": "📦 My Orders",
         "menu_support": "💬 Contact Support",
+        "menu_language": "🌍 Change language",
         "menu_website": "🌐 Website",
         "menu_guide": "📖 Setup Guide",
         "back": "← Back",
@@ -135,6 +136,7 @@ TEXT = {
         "menu_plans": "🛒 پلن‌ها و قیمت‌ها",
         "menu_orders": "📦 سفارش‌های من",
         "menu_support": "💬 تماس با پشتیبانی",
+        "menu_language": "🌍 تغییر زبان",
         "menu_website": "🌐 وبسایت",
         "menu_guide": "📖 راهنمای اتصال",
         "back": "← بازگشت",
@@ -165,11 +167,14 @@ def _kb(rows: list[list[dict]]) -> dict:
     return {"inline_keyboard": rows}
 
 
-def _language_kb() -> dict:
-    return _kb([[
+def _language_kb(lang: str | None = None) -> dict:
+    rows = [[
         {"text": "🇬🇧 English", "callback_data": "lang:en"},
         {"text": "🇮🇷 فارسی", "callback_data": "lang:fa"},
-    ]])
+    ]]
+    if lang:
+        rows.append([{"text": _t(lang, "back"), "callback_data": "menu:main"}])
+    return _kb(rows)
 
 
 def _main_menu_kb(lang: str) -> dict:
@@ -177,6 +182,7 @@ def _main_menu_kb(lang: str) -> dict:
         [{"text": _t(lang, "menu_plans"), "callback_data": "menu:plans"}],
         [{"text": _t(lang, "menu_orders"), "callback_data": "menu:orders"}],
         [{"text": _t(lang, "menu_support"), "callback_data": "menu:support"}],
+        [{"text": _t(lang, "menu_language"), "callback_data": "menu:language"}],
         [
             {"text": _t(lang, "menu_website"), "url": settings.SITE_BASE_URL},
             {"text": _t(lang, "menu_guide"), "url": f"{settings.SITE_BASE_URL}/guide"},
@@ -527,6 +533,10 @@ async def _handle_callback(db, callback_query: dict) -> None:
 
     if data == "menu:main":
         await _show_main_menu(chat_id, lang, "welcome_back")
+        return
+
+    if data == "menu:language":
+        await telegram.send_message(chat_id, _t(lang, "choose_language"), reply_markup=_language_kb(lang))
         return
 
     if data == "menu:plans":
