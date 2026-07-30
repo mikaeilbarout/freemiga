@@ -505,6 +505,12 @@ input:focus, textarea:focus, select:focus {
 .plan-features svg { width: 15px; height: 15px; color: var(--success); flex-shrink: 0; }
 .plan-card .btn { margin-top: auto; }
 .plans-empty { text-align: center; color: var(--text-dim); font-size: 14px; padding: 40px 0; }
+.plans-pagination {
+  display: flex; align-items: center; justify-content: center; gap: 18px;
+  margin: 32px auto 0; max-width: 720px;
+}
+.plans-pagination button:disabled { opacity: 0.35; cursor: not-allowed; }
+.plans-page-indicator { color: var(--text-dim); font-size: 13px; font-weight: 600; min-width: 90px; text-align: center; }
 
 .features-grid {
   display: grid;

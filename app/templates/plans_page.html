@@ -19,6 +19,11 @@
   <div class="plans-grid" id="plansGrid">
     <div class="plans-empty">{{ t('plans_loading') }}</div>
   </div>
+  <div class="plans-pagination" id="plansPagination" style="display:none">
+    <button class="btn btn-ghost btn-sm" id="plansPrevBtn" onclick="changePlansPage(-1)">{{ '→' if dir == 'rtl' else '←' }} {{ t('plans_prev') }}</button>
+    <span class="plans-page-indicator" id="plansPageIndicator"></span>
+    <button class="btn btn-ghost btn-sm" id="plansNextBtn" onclick="changePlansPage(1)">{{ t('plans_next') }} {{ '←' if dir == 'rtl' else '→' }}</button>
+  </div>
 </section>
 
 <section class="section">
@@ -48,7 +53,13 @@ const PLANS_I18N = {
   priceFree: {{ t('price_free')|tojson }},
   empty: {{ t('plans_empty')|tojson }},
   loadError: {{ t('plans_load_error')|tojson }},
+  pageOf: {{ t('plans_page_of', current='__CUR__', total='__TOT__')|tojson }},
 };
+
+const PLANS_PAGE_SIZE = 6;
+let allPlans = [];
+let currentPlansPage = 0;
+let isLoggedIn = false;
 
 function planFeatures(p) {
   const check = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>';
@@ -60,6 +71,52 @@ function planFeatures(p) {
   `;
 }
 
+function renderPlansPage() {
+  const grid = document.getElementById('plansGrid');
+  const paidPlans = allPlans.filter(p => p.price_usdt > 0);
+  const featuredId = paidPlans.length
+    ? paidPlans.reduce((a, b) => (b.price_usdt > a.price_usdt ? b : a), paidPlans[0]).id
+    : null;
+
+  const totalPages = Math.max(1, Math.ceil(allPlans.length / PLANS_PAGE_SIZE));
+  currentPlansPage = Math.min(currentPlansPage, totalPages - 1);
+  const start = currentPlansPage * PLANS_PAGE_SIZE;
+  const pagePlans = allPlans.slice(start, start + PLANS_PAGE_SIZE);
+
+  grid.innerHTML = pagePlans.map(p => {
+    const isFree = p.price_usdt === 0;
+    const isFeatured = p.id === featuredId;
+    return `
+    <div class="card plan-card ${isFeatured ? 'featured' : ''} ${isFree ? 'free-trial' : ''}">
+      ${isFeatured ? `<div class="tag-featured">${PLANS_I18N.bestValue}</div>` : ''}
+      ${isFree ? `<div class="tag-free">${PLANS_I18N.freeTrialTag}</div>` : ''}
+      <div class="plan-name">${p.name}</div>
+      <div class="plan-price">${isFree ? PLANS_I18N.priceFree : '$' + p.price_usdt}<span> / ${p.duration_days} days</span></div>
+      <div class="plan-meta">${isFree ? PLANS_I18N.freeBilling : PLANS_I18N.billedOnce}</div>
+      <ul class="plan-features">${planFeatures(p)}</ul>
+      <a class="btn ${isFeatured ? 'btn-primary' : 'btn-ghost'} btn-block" href="${isLoggedIn ? '/billing' : '/signup'}?plan=${p.id}">${isFree ? PLANS_I18N.claimFree : PLANS_I18N.choose.replace('__NAME__', p.name)}</a>
+    </div>
+  `;
+  }).join('');
+
+  const pagination = document.getElementById('plansPagination');
+  if (allPlans.length <= PLANS_PAGE_SIZE) {
+    pagination.style.display = 'none';
+  } else {
+    pagination.style.display = 'flex';
+    document.getElementById('plansPrevBtn').disabled = currentPlansPage === 0;
+    document.getElementById('plansNextBtn').disabled = currentPlansPage >= totalPages - 1;
+    document.getElementById('plansPageIndicator').textContent =
+      PLANS_I18N.pageOf.replace('__CUR__', currentPlansPage + 1).replace('__TOT__', totalPages);
+  }
+}
+
+function changePlansPage(delta) {
+  currentPlansPage += delta;
+  renderPlansPage();
+  document.getElementById('plansGrid').scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+
 async function loadPlans() {
   const grid = document.getElementById('plansGrid');
   try {
@@ -69,39 +126,20 @@ async function loadPlans() {
       grid.innerHTML = `<div class="plans-empty">${PLANS_I18N.empty}</div>`;
       return;
     }
-    const paidPlans = plans.filter(p => p.price_usdt > 0);
-    const featuredId = paidPlans.length
-      ? paidPlans.reduce((a, b) => (b.price_usdt > a.price_usdt ? b : a), paidPlans[0]).id
-      : null;
-    grid.innerHTML = plans.map(p => {
-      const isFree = p.price_usdt === 0;
-      const isFeatured = p.id === featuredId;
-      return `
-      <div class="card plan-card ${isFeatured ? 'featured' : ''} ${isFree ? 'free-trial' : ''}">
-        ${isFeatured ? `<div class="tag-featured">${PLANS_I18N.bestValue}</div>` : ''}
-        ${isFree ? `<div class="tag-free">${PLANS_I18N.freeTrialTag}</div>` : ''}
-        <div class="plan-name">${p.name}</div>
-        <div class="plan-price">${isFree ? PLANS_I18N.priceFree : '$' + p.price_usdt}<span> / ${p.duration_days} days</span></div>
-        <div class="plan-meta">${isFree ? PLANS_I18N.freeBilling : PLANS_I18N.billedOnce}</div>
-        <ul class="plan-features">${planFeatures(p)}</ul>
-        <a class="btn ${isFeatured ? 'btn-primary' : 'btn-ghost'} btn-block choose-plan-btn" data-plan="${p.id}" href="/signup?plan=${p.id}">${isFree ? PLANS_I18N.claimFree : PLANS_I18N.choose.replace('__NAME__', p.name)}</a>
-      </div>
-    `;
-    }).join('');
+    allPlans = plans;
+    currentPlansPage = 0;
+    renderPlansPage();
   } catch (e) {
     grid.innerHTML = `<div class="plans-empty">${PLANS_I18N.loadError}</div>`;
   }
 }
 
-async function retargetChooseButtonsIfLoggedIn() {
+async function checkLoggedIn() {
   const res = await fetch('/api/auth/me');
-  if (!res.ok) return; // not logged in — /signup?plan= links are correct as-is
-  document.querySelectorAll('.choose-plan-btn').forEach(a => {
-    a.href = `/billing?plan=${a.dataset.plan}`;
-  });
+  isLoggedIn = res.ok;
 }
 
-loadPlans().then(retargetChooseButtonsIfLoggedIn);
+checkLoggedIn().then(loadPlans);
 </script>
 </body>
 </html>

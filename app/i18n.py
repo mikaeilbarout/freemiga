@@ -81,6 +81,9 @@ TEXT = {
         "plan_choose": "Choose {name}",
         "plans_loading": "Loading plans…",
         "plans_load_error": "Could not load plans. Please refresh.",
+        "plans_prev": "Previous",
+        "plans_next": "Next",
+        "plans_page_of": "Page {current} of {total}",
 
         # Features page
         "features_page_title": "Why Freemiga",
@@ -502,6 +505,9 @@ TEXT = {
         "plan_choose": "انتخاب {name}",
         "plans_loading": "در حال بارگذاری پلن‌ها…",
         "plans_load_error": "بارگذاری پلن‌ها ناموفق بود. لطفاً صفحه را رفرش کنید.",
+        "plans_prev": "قبلی",
+        "plans_next": "بعدی",
+        "plans_page_of": "صفحه {current} از {total}",
 
         # Features page
         "features_page_title": "چرا فریمیگا",
