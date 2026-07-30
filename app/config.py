@@ -6,7 +6,7 @@ load_dotenv()
 
 class Settings:
     # Marzban panel
-    MARZBAN_BASE_URL: str = os.getenv("MARZBAN_BASE_URL", "https://panel.persepolisconstruction.co.uk:8000")
+    MARZBAN_BASE_URL: str = os.getenv("MARZBAN_BASE_URL", "https://panel.freemiga.com:8000")
     MARZBAN_ADMIN_USERNAME: str = os.getenv("MARZBAN_ADMIN_USERNAME", "")
     MARZBAN_ADMIN_PASSWORD: str = os.getenv("MARZBAN_ADMIN_PASSWORD", "")
     MARZBAN_INBOUND_TAG: str = os.getenv("MARZBAN_INBOUND_TAG", "VLESS_WS_TLS")
