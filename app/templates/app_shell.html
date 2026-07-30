@@ -108,6 +108,13 @@
   .order-row a.pay-link { color: var(--accent-2); font-weight: 600; margin-inline-start: 10px; }
   .empty-state { color: var(--text-faint); font-size: 13px; padding: 6px 0; }
 
+  #plans {
+    max-height: 380px; overflow-y: auto; padding-inline-end: 6px;
+  }
+  #plans::-webkit-scrollbar { width: 6px; }
+  #plans::-webkit-scrollbar-track { background: transparent; }
+  #plans::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+  #plans::-webkit-scrollbar-thumb:hover { background: var(--accent); }
   .plan-option {
     border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px 18px; margin-bottom: 10px;
     cursor: pointer; display: flex; justify-content: space-between; align-items: center;
