@@ -660,11 +660,9 @@ const BILLING_I18N = {
   card: {{ t('order_card')|tojson }},
   crypto: {{ t('order_crypto')|tojson }},
   payNow: {{ t('order_pay_now')|tojson }},
-  cancelLink: {{ t('billing_cancel_link')|tojson }},
   noOrders: {{ t('no_orders_yet')|tojson }},
   orderError: {{ t('billing_order_error')|tojson }},
-  cancelConfirm: {{ t('billing_cancel_confirm')|tojson }},
-  cancelError: {{ t('billing_cancel_error')|tojson }},
+  termsRequired: {{ t('billing_terms_required')|tojson }},
   free: {{ t('order_free')|tojson }},
   priceFree: {{ t('price_free')|tojson }},
 };
@@ -722,11 +720,17 @@ function selectPlan(id) {
   freeBtn.style.display = isFree ? 'inline-flex' : 'none';
   document.getElementById('cryptoNetworkChoice').style.display = 'none';
 
-  if (!blocked) {
-    cardBtn.disabled = false;
-    cryptoToggleBtn.disabled = false;
-    freeBtn.disabled = false;
-  }
+  // Must unconditionally set both true and false here, not just clear
+  // disabled when unblocked — this used to only ever enable, never
+  // re-disable, so unchecking the terms box after checking it once left
+  // the buy buttons clickable (found live: a customer could tick the
+  // box, untick it, and still complete a purchase with no consent
+  // recorded... except buyPlan() itself now also independently checks
+  // the box before doing anything, so this was defense-in-depth on top
+  // of an already-real gap, not the only layer).
+  cardBtn.disabled = blocked;
+  cryptoToggleBtn.disabled = blocked;
+  freeBtn.disabled = blocked;
   // Showing/hiding the payment buttons above changes this accordion's
   // content height — re-sync or they clip at whatever height was cached
   // from before this selection (see the same fix on loadPlans/loadAllOrders).
@@ -798,7 +802,7 @@ async function loadAllOrders() {
     <div class="order-row">
       <div>
         ${o.is_renewal ? BILLING_I18N.renewal : BILLING_I18N.newPurchase} · ${o.amount_due === 0 ? BILLING_I18N.priceFree : (o.payment_method === 'crypto' ? o.amount_due + ' USDT' : '$' + o.amount_due)} · ${o.payment_method === 'card' ? BILLING_I18N.card : (o.payment_method === 'crypto' ? BILLING_I18N.crypto + (o.crypto_network === 'polygon' ? ' (Polygon)' : ' (Tron)') : BILLING_I18N.free)}
-        ${o.status === 'pending' ? `<a class="pay-link" href="/pay/${o.id}">${BILLING_I18N.payNow}</a> · <a class="pay-link" href="#" onclick="cancelOrder('${o.id}');return false" style="color:var(--text-faint)">${BILLING_I18N.cancelLink}</a>` : ''}
+        ${o.status === 'pending' ? `<a class="pay-link" href="/pay/${o.id}">${BILLING_I18N.payNow}</a>` : ''}
       </div>
       ${statusBadgeBilling(o.status)}
     </div>
@@ -808,6 +812,13 @@ async function loadAllOrders() {
 
 async function buyPlan(method, cryptoNetwork, confirmCancelPending) {
   if (!selectedPlan) return;
+  // Don't rely solely on the button's disabled state (that's UI, easy to
+  // get out of sync or bypass) — verify consent right here too before
+  // doing anything that touches the order/terms endpoints.
+  if (!document.getElementById('termsCheckbox').checked) {
+    showToast(BILLING_I18N.termsRequired, 'error');
+    return;
+  }
   // Re-accepted fresh on every purchase — the checkbox is never pre-checked
   // from a prior visit (see selectPlan's termsOk), and the endpoint always
   // re-stamps terms_accepted_at regardless of prior history.
@@ -862,17 +873,6 @@ function confirmPendingOrderReplace() {
   const retry = pendingOrderRetry;
   closePendingOrderModal();
   if (retry) buyPlan(retry.method, retry.cryptoNetwork, true);
-}
-
-async function cancelOrder(id) {
-  if (!confirm(BILLING_I18N.cancelConfirm)) return;
-  const res = await fetch(`/api/orders/${id}/cancel`, {method: 'POST'});
-  if (!res.ok) {
-    const data = await res.json();
-    showToast(data.detail || BILLING_I18N.cancelError, 'error');
-    return;
-  }
-  loadAllOrders();
 }
 
 async function loadPaymentMethods() {
