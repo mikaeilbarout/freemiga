@@ -363,12 +363,29 @@ async function loadPlans() {
       </div>
       <div class="row-meta">${p.data_limit_gb} GB · ${p.duration_days} days · ${p.max_devices ? p.max_devices + ' devices' : 'default device limit'}</div>
       <div class="actions">
-        <button class="btn btn-ghost btn-sm" onclick="editPlanPrice('${p.id}', ${p.price_usdt})">Change price</button>
-        <button class="btn btn-ghost btn-sm" onclick="editPlanDevices('${p.id}', ${p.max_devices ?? 'null'})">Change device limit</button>
-        ${p.is_active ? `<button class="btn btn-danger btn-sm" onclick="deactivatePlan('${p.id}')">Deactivate</button>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="toggleEditPlan('${p.id}')">Edit</button>
+        <button class="btn btn-ghost btn-sm" onclick="togglePlanActive('${p.id}', ${p.is_active})">${p.is_active ? 'Deactivate' : 'Reactivate'}</button>
+        <button class="btn btn-danger btn-sm" onclick="deletePlan('${p.id}')">Delete</button>
+      </div>
+      <div class="new-plan-card" id="editPlan-${p.id}" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid var(--border, #333)">
+        <input id="editName-${p.id}" value="${p.name}" placeholder="Plan name">
+        <input id="editPrice-${p.id}" value="${p.price_usdt}" placeholder="Price (USDT)" type="number" step="0.01">
+        <input id="editData-${p.id}" value="${p.data_limit_gb}" placeholder="Data limit (GB)" type="number">
+        <input id="editDays-${p.id}" value="${p.duration_days}" placeholder="Duration (days)" type="number">
+        <input id="editDevices-${p.id}" value="${p.max_devices ?? ''}" placeholder="Max devices (blank uses marzban-guard's default)" type="number">
+        <div style="margin:6px 0 10px">
+          <label><input type="checkbox" id="editActive-${p.id}" ${p.is_active ? 'checked' : ''}> Active (shown to customers)</label>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="savePlan('${p.id}')">Save changes</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleEditPlan('${p.id}')">Cancel</button>
       </div>
     </div>
   `).join('');
+}
+
+function toggleEditPlan(id) {
+  const el = document.getElementById(`editPlan-${id}`);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 async function loadBanners() {
@@ -461,33 +478,49 @@ async function createPlan() {
   if (res.ok) loadPlans(); else showToast('This plan could not be created — please try again.', 'error');
 }
 
-async function editPlanPrice(id, currentPrice) {
-  const newPrice = prompt('New price (USDT):', currentPrice);
-  if (!newPrice) return;
-  await fetch(`/api/admin/plans/${id}`, {
+async function savePlan(id) {
+  const devicesRaw = document.getElementById(`editDevices-${id}`).value.trim();
+  const payload = {
+    name: document.getElementById(`editName-${id}`).value.trim(),
+    price_usdt: parseFloat(document.getElementById(`editPrice-${id}`).value),
+    data_limit_gb: parseInt(document.getElementById(`editData-${id}`).value),
+    duration_days: parseInt(document.getElementById(`editDays-${id}`).value),
+    max_devices: devicesRaw ? parseInt(devicesRaw) : null,
+    is_active: document.getElementById(`editActive-${id}`).checked,
+  };
+  if (!payload.name || isNaN(payload.price_usdt) || !payload.data_limit_gb || !payload.duration_days) {
+    showToast('Please fill in every field (price can be 0 for a free plan).', 'error');
+    return;
+  }
+  const res = await fetch(`/api/admin/plans/${id}`, {
     method: 'PUT', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({price_usdt: parseFloat(newPrice)})
+    body: JSON.stringify(payload)
   });
-  loadPlans();
+  if (res.ok) { showToast('Plan updated.', 'success'); loadPlans(); }
+  else showToast('Could not update this plan — please try again.', 'error');
 }
 
-async function editPlanDevices(id, currentMaxDevices) {
-  const input = prompt(
-    "Max devices for this plan (blank = use marzban-guard's default):",
-    currentMaxDevices ?? ''
-  );
-  if (input === null) return;
-  const trimmed = input.trim();
-  await fetch(`/api/admin/plans/${id}`, {
+async function togglePlanActive(id, currentlyActive) {
+  const res = await fetch(`/api/admin/plans/${id}`, {
     method: 'PUT', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({max_devices: trimmed ? parseInt(trimmed) : null})
+    body: JSON.stringify({is_active: !currentlyActive})
   });
-  loadPlans();
+  if (res.ok) loadPlans();
+  else showToast('Could not update this plan — please try again.', 'error');
 }
 
-async function deactivatePlan(id) {
-  if (!confirm("This plan will no longer be shown to new customers. Continue?")) return;
-  await fetch(`/api/admin/plans/${id}`, {method: 'DELETE'});
+async function deletePlan(id) {
+  if (!confirm(
+    "Delete this plan? If it's never been ordered, it will be permanently removed. "
+    + "Otherwise (past orders reference it) it will be deactivated instead."
+  )) return;
+  const res = await fetch(`/api/admin/plans/${id}`, {method: 'DELETE'});
+  if (!res.ok) {
+    showToast('Could not delete this plan — please try again.', 'error');
+    return;
+  }
+  const data = await res.json().catch(() => ({}));
+  showToast(data.deleted ? 'Plan permanently deleted.' : 'This plan has order history — deactivated instead.', 'success');
   loadPlans();
 }
 

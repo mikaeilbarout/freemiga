@@ -86,16 +86,29 @@ def update_plan(plan_id: str, payload: PlanUpdate, db: Session = Depends(get_db)
 
 
 @router.delete("/plans/{plan_id}", dependencies=[Depends(require_admin)])
-def deactivate_plan(plan_id: str, db: Session = Depends(get_db)):
-    """Soft-delete: plans are never hard-deleted since past orders reference
-    them. This just hides it from customers."""
+def delete_plan(plan_id: str, db: Session = Depends(get_db)):
+    """Permanently deletes a plan that's never actually been ordered.
+    A plan with order history can't be hard-deleted (past orders
+    reference it via a NOT NULL foreign key, for bookkeeping) — it's
+    deactivated instead, which hides it from new customers without
+    touching existing history."""
     plan = db.query(Plan).filter(Plan.id == plan_id).first()
     if not plan:
         raise HTTPException(404, "Plan not found")
-    plan.is_active = False
+
+    plan_name = plan.name
+    has_orders = db.query(Order).filter(Order.plan_id == plan_id).first() is not None
+
+    if has_orders:
+        plan.is_active = False
+        db.commit()
+        _log_action(db, "deactivate_plan", plan_id, plan_name)
+        return {"ok": True, "deleted": False}
+
+    db.delete(plan)
     db.commit()
-    _log_action(db, "deactivate_plan", plan_id)
-    return {"ok": True}
+    _log_action(db, "delete_plan", plan_id, plan_name)
+    return {"ok": True, "deleted": True}
 
 
 @router.get("/customers", dependencies=[Depends(require_admin)])
