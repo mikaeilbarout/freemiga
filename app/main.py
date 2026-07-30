@@ -1,0 +1,228 @@
+import asyncio
+import logging
+
+from fastapi import FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from slowapi.errors import RateLimitExceeded
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.sessions import SessionMiddleware
+
+from app import i18n
+from app.config import settings
+from app.database import Base, engine, SessionLocal
+from app.lang import LANG_COOKIE, SUPPORTED_LANGUAGES, resolve_lang
+from app.limiter import limiter
+from app.models import Plan
+from app.routers import admin, auth, banners, orders, payments, plans, support
+from app.services.telegram import telegram_link_loop
+
+logging.basicConfig(level=logging.INFO)
+
+app = FastAPI(title=settings.SITE_NAME)
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(status_code=429, content={"detail": "Too many attempts — please slow down."})
+
+
+@app.exception_handler(StarletteHTTPException)
+async def branded_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if request.url.path.startswith("/api"):
+        return await http_exception_handler(request, exc)
+    lang = resolve_lang(request)
+    message = i18n.t(lang, "error_404_message") if exc.status_code == 404 else (exc.detail or i18n.t(lang, "error_generic_message"))
+    return render(request, "error.html", code=exc.status_code, message=message, status_code=exc.status_code)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logging.exception("Unhandled error on %s", request.url.path)
+    if request.url.path.startswith("/api"):
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    lang = resolve_lang(request)
+    return render(
+        request, "error.html", code=500,
+        message=i18n.t(lang, "error_500_message"),
+        status_code=500,
+    )
+
+if not settings.SESSION_SECRET:
+    logging.warning(
+        "SESSION_SECRET is not set in .env — using an insecure default. "
+        "Set a real random value before going to production."
+    )
+if settings.STRIPE_SECRET_KEY and not settings.STRIPE_WEBHOOK_SECRET:
+    logging.warning(
+        "STRIPE_SECRET_KEY is set but STRIPE_WEBHOOK_SECRET is not — "
+        "card payments are disabled until the webhook secret is configured."
+    )
+if settings.NOWPAYMENTS_API_KEY and not settings.NOWPAYMENTS_IPN_SECRET:
+    logging.warning(
+        "NOWPAYMENTS_API_KEY is set but NOWPAYMENTS_IPN_SECRET is not — "
+        "crypto payments are disabled until the IPN secret is configured."
+    )
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.SESSION_SECRET or "insecure-dev-secret-change-me",
+    same_site="lax",
+    https_only=settings.SESSION_COOKIE_SECURE,
+)
+
+templates = Jinja2Templates(directory="app/templates")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+def render(request: Request, template_name: str, *, force_lang: str = None, status_code: int = 200, **extra_context):
+    had_cookie = request.cookies.get(LANG_COOKIE) in SUPPORTED_LANGUAGES
+    lang = force_lang or resolve_lang(request)
+    context = {
+        "request": request,
+        "site_name": settings.SITE_NAME,
+        "lang": lang,
+        "dir": "rtl" if lang == "fa" else "ltr",
+        "t": lambda key, **kw: i18n.t(lang, key, **kw),
+        **extra_context,
+    }
+    response = templates.TemplateResponse(template_name, context, status_code=status_code)
+    if not force_lang and not had_cookie:
+        response.set_cookie(LANG_COOKIE, lang, max_age=60 * 60 * 24 * 365, samesite="lax")
+    return response
+
+app.include_router(auth.router)
+app.include_router(plans.router)
+app.include_router(orders.router)
+app.include_router(payments.router)
+app.include_router(support.router)
+app.include_router(admin.router)
+app.include_router(banners.router)
+app.include_router(banners.admin_router)
+
+
+def _seed_plans() -> None:
+    db = SessionLocal()
+    try:
+        if db.query(Plan).count() == 0:
+            db.add_all([
+                Plan(name="Free Trial", price_usdt=0, data_limit_gb=1, duration_days=1),
+                Plan(name="Basic", price_usdt=5, data_limit_gb=10, duration_days=30),
+                Plan(name="Standard", price_usdt=9, data_limit_gb=30, duration_days=30),
+                Plan(name="Unlimited", price_usdt=15, data_limit_gb=100, duration_days=30),
+            ])
+            db.commit()
+    finally:
+        db.close()
+
+
+@app.on_event("startup")
+async def on_startup():
+    # Under Docker/Postgres, schema setup runs once as its own process
+    # BEFORE gunicorn starts (see scripts/init_db.py + Dockerfile) — running
+    # multiple gunicorn workers through create_all() concurrently races on
+    # creating the Postgres enum types and crashes. This call stays here
+    # only for convenience when running locally without Docker (single
+    # process, SQLite, no race); it's a harmless no-op once tables already
+    # exist, and any leftover race is swallowed defensively either way.
+    try:
+        Base.metadata.create_all(bind=engine)
+        _seed_plans()
+    except Exception:
+        logging.exception("Schema setup on startup failed — continuing, assuming another worker handled it")
+    asyncio.create_task(telegram_link_loop())
+
+
+# ---- Pages (server just serves the shell; JS in each page calls the API) ----
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
+
+@app.get("/set-language")
+def set_language(request: Request, lang: str, next: str = "/"):
+    lang = lang if lang in SUPPORTED_LANGUAGES else settings.DEFAULT_LANGUAGE
+    safe_next = next if next.startswith("/") and not next.startswith("//") else "/"
+    response = RedirectResponse(url=safe_next, status_code=303)
+    response.set_cookie(LANG_COOKIE, lang, max_age=60 * 60 * 24 * 365, samesite="lax")
+    return response
+
+
+@app.get("/", response_class=HTMLResponse)
+def index(request: Request):
+    return render(request, "home.html")
+
+
+@app.get("/plans", response_class=HTMLResponse)
+def plans_page(request: Request):
+    return render(request, "plans_page.html")
+
+
+@app.get("/how-it-works", response_class=HTMLResponse)
+def how_it_works_page(request: Request):
+    return render(request, "how_it_works.html")
+
+
+@app.get("/features", response_class=HTMLResponse)
+def features_page(request: Request):
+    return render(request, "features.html")
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    return render(request, "login.html")
+
+
+@app.get("/signup", response_class=HTMLResponse)
+def signup_page(request: Request):
+    return render(request, "signup.html")
+
+
+@app.get("/forgot-password", response_class=HTMLResponse)
+def forgot_password_page(request: Request):
+    return render(request, "forgot_password.html")
+
+
+# All four logged-in app pages share one template (a sidebar shell) — the
+# route only decides which section starts active; switching sections after
+# that happens client-side (see app_shell.html) with no further navigation.
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_page(request: Request):
+    return render(request, "app_shell.html", active_section="overview", page_title_key="dashboard_page_title")
+
+
+@app.get("/billing", response_class=HTMLResponse)
+def billing_page(request: Request):
+    return render(request, "app_shell.html", active_section="billing", page_title_key="billing_page_title")
+
+
+@app.get("/account", response_class=HTMLResponse)
+def account_page(request: Request):
+    return render(request, "app_shell.html", active_section="account", page_title_key="account_page_title")
+
+
+@app.get("/support", response_class=HTMLResponse)
+def support_page(request: Request):
+    return render(request, "app_shell.html", active_section="support", page_title_key="support_page_title")
+
+
+@app.get("/pay/{order_id}", response_class=HTMLResponse)
+def pay_page(request: Request, order_id: str):
+    return render(request, "pay.html")
+
+
+@app.get("/terms", response_class=HTMLResponse)
+def terms_page(request: Request):
+    return render(request, "terms.html", updated_at="July 28, 2026")
+
+
+@app.get("/guide", response_class=HTMLResponse)
+def guide_page(request: Request):
+    return render(request, "guide.html")
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page(request: Request):
+    return render(request, "admin.html", force_lang="en")

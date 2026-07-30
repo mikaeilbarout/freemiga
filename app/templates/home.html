@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ site_name }} — {{ t('home_title') }}</title>
+{% include "_fonts.html" %}
+<style>
+  .hero { padding: 96px 24px 32px; text-align: center; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px;
+    background: var(--panel); border: 1px solid var(--border); font-size: 12.5px; font-weight: 600;
+    color: var(--text-dim); margin-bottom: 28px;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+  .hero h1 { font-size: clamp(36px, 6vw, 64px); line-height: 1.06; max-width: 780px; margin: 0 auto; }
+  .hero h1 .grad {
+    background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero p.lead { max-width: 540px; margin: 24px auto 0; color: var(--text-dim); font-size: 17px; line-height: 1.7; }
+  .hero-actions { display: flex; justify-content: center; gap: 12px; margin-top: 36px; flex-wrap: wrap; }
+  .hero-actions .btn { padding: 14px 28px; font-size: 15px; }
+  .hero-perk {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 20px;
+    font-size: 13px; font-weight: 600; color: var(--success);
+  }
+  .hero-perk:hover { color: var(--text); }
+
+  .trust-row {
+    display: flex; justify-content: center; gap: 28px; flex-wrap: wrap; margin-top: 48px;
+    color: var(--text-faint); font-size: 12.5px;
+  }
+  .trust-row span { display: flex; align-items: center; gap: 7px; }
+  .trust-row svg { width: 15px; height: 15px; color: var(--text-dim); }
+
+  .explore-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px;
+    max-width: 960px; margin: 0 auto;
+  }
+  @media (max-width: 860px) {
+    .explore-grid { grid-template-columns: 1fr; max-width: 420px; }
+  }
+  .explore-card {
+    padding: 26px 24px; display: flex; flex-direction: column; gap: 10px;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+  .explore-card:hover { transform: translateY(-4px); border-color: var(--border-strong); }
+  .explore-card h3 { font-size: 16px; }
+  .explore-card p { color: var(--text-dim); font-size: 13.5px; line-height: 1.7; flex: 1; }
+  .explore-card .link-arrow { color: var(--accent-2); font-size: 13.5px; font-weight: 600; }
+
+  .promo-band {
+    max-width: 920px; margin: 0 auto; padding: 48px 40px;
+    display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap;
+    border-color: rgba(124, 92, 255, 0.35);
+    background: linear-gradient(135deg, rgba(124, 92, 255, 0.12), rgba(34, 211, 238, 0.08));
+  }
+  .promo-band .promo-tag {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px;
+    background: var(--success-soft); color: var(--success); font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 12px;
+  }
+  .promo-band h2 { font-size: 24px; margin-bottom: 6px; }
+  .promo-band p { color: var(--text-dim); font-size: 14px; }
+</style>
+</head>
+<body>
+
+{% include "_nav.html" %}
+
+<header class="hero">
+  <div class="eyebrow"><span class="dot"></span> {{ t('hero_eyebrow') }}</div>
+  <h1 class="fade-up">{{ t('hero_h1_line1') }} <span class="grad">{{ t('hero_h1_grad') }}</span>{{ t('hero_h1_line2') }}</h1>
+  <p class="lead fade-up" style="animation-delay:.08s">{{ t('hero_lead') }}</p>
+  <div class="hero-actions fade-up" style="animation-delay:.16s">
+    <a class="btn btn-primary" href="/signup">{{ t('hero_cta_primary') }}</a>
+    <a class="btn btn-ghost" href="/plans">{{ t('hero_cta_secondary') }}</a>
+  </div>
+  <a class="hero-perk fade-up" style="animation-delay:.2s" href="/plans">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M20 12v9H4v-9M2 7h20v5H2V7Zm10 0V4a2.5 2.5 0 0 0-5 0v3h5Zm0 0V4a2.5 2.5 0 0 1 5 0v3h-5Z"/></svg>
+    {{ t('hero_perk') }}
+  </a>
+</header>
+
+<div class="banner-carousel" id="bannerCarousel" style="display:none">
+  <div class="banner-track" id="bannerTrack"></div>
+  <div class="banner-dots" id="bannerDots"></div>
+</div>
+
+<header class="hero" style="padding-top:32px;padding-bottom:0">
+  <div class="trust-row fade-up">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6l-8-4Z"/></svg> {{ t('trust_no_log') }}</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg> {{ t('trust_fast') }}</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg> {{ t('trust_support') }}</span>
+  </div>
+</header>
+
+<section class="section">
+  <div class="section-head">
+    <div class="kicker">{{ t('explore_kicker') }}</div>
+    <h2>{{ t('explore_h2') }}</h2>
+  </div>
+  <div class="explore-grid">
+    <a class="card explore-card" href="/plans">
+      <h3>{{ t('explore_plans_title') }}</h3>
+      <p>{{ t('explore_plans_desc') }}</p>
+      <span class="link-arrow">{{ t('explore_plans_link') }}</span>
+    </a>
+    <a class="card explore-card" href="/how-it-works">
+      <h3>{{ t('explore_how_title') }}</h3>
+      <p>{{ t('explore_how_desc') }}</p>
+      <span class="link-arrow">{{ t('explore_how_link') }}</span>
+    </a>
+    <a class="card explore-card" href="/features">
+      <h3>{{ t('explore_why_title') }}</h3>
+      <p>{{ t('explore_why_desc') }}</p>
+      <span class="link-arrow">{{ t('explore_why_link') }}</span>
+    </a>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0">
+  <div class="card promo-band">
+    <div>
+      <div class="promo-tag">{{ t('promo_tag') }}</div>
+      <h2>{{ t('promo_h2') }}</h2>
+      <p>{{ t('promo_p') }}</p>
+    </div>
+    <a class="btn btn-primary" href="/plans">{{ t('promo_cta') }}</a>
+  </div>
+</section>
+
+<section class="section">
+  <div class="card cta-band">
+    <div>
+      <h2>{{ t('cta_band_h2') }}</h2>
+      <p>{{ t('cta_band_p') }}</p>
+    </div>
+    <a class="btn btn-primary" href="/signup">{{ t('cta_band_btn') }}</a>
+  </div>
+</section>
+
+{% include "_footer.html" %}
+
+<script>
+let bannerIndex = 0;
+let bannerTimer = null;
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+
+// Only allow relative paths or http(s) absolute URLs — blocks javascript:
+// and other script-bearing schemes in admin-supplied banner links.
+function safeUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('/') && !url.startsWith('//')) return url;
+  try {
+    const parsed = new URL(url, window.location.origin);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
+  } catch (e) {}
+  return '';
+}
+
+async function loadBanners() {
+  try {
+    const res = await fetch('/api/banners');
+    const banners = await res.json();
+    if (!banners.length) return;
+
+    const carousel = document.getElementById('bannerCarousel');
+    const track = document.getElementById('bannerTrack');
+    const dots = document.getElementById('bannerDots');
+    carousel.style.display = 'block';
+
+    track.innerHTML = banners.map((b, i) => {
+      const link = escapeHtml(safeUrl(b.link_url));
+      const image = escapeHtml(safeUrl(b.image_path));
+      const headline = escapeHtml(b.headline);
+      const subtext = escapeHtml(b.subtext);
+      return `
+      <div class="banner-slide ${i === 0 ? 'active' : ''}" data-i="${i}">
+        ${link ? `<a href="${link}" style="position:absolute;inset:0;z-index:2"></a>` : ''}
+        <img src="${image}" alt="${headline}">
+        ${(headline || subtext) ? `
+          <div class="overlay">
+            ${headline ? `<h3>${headline}</h3>` : ''}
+            ${subtext ? `<p>${subtext}</p>` : ''}
+          </div>
+        ` : ''}
+      </div>
+    `;
+    }).join('');
+    dots.innerHTML = banners.map((_, i) => `<div class="banner-dot ${i === 0 ? 'active' : ''}" data-i="${i}"></div>`).join('');
+
+    dots.querySelectorAll('.banner-dot').forEach(dot => {
+      dot.addEventListener('click', () => showBanner(parseInt(dot.dataset.i), banners.length));
+    });
+
+    if (banners.length > 1) {
+      bannerTimer = setInterval(() => showBanner((bannerIndex + 1) % banners.length, banners.length), 5000);
+    }
+  } catch (e) {}
+}
+
+function showBanner(i, total) {
+  bannerIndex = i;
+  document.querySelectorAll('.banner-slide').forEach(el => el.classList.toggle('active', parseInt(el.dataset.i) === i));
+  document.querySelectorAll('.banner-dot').forEach(el => el.classList.toggle('active', parseInt(el.dataset.i) === i));
+}
+
+loadBanners();
+</script>
+</body>
+</html>

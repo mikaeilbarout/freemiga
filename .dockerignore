@@ -1,0 +1,9 @@
+.venv
+__pycache__
+*.pyc
+.git
+.env
+freemiga.db
+backups
+app/static/uploads
+.mypy_cache

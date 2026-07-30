@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ t('plans_page_title') }} | {{ site_name }}</title>
+{% include "_fonts.html" %}
+</head>
+<body>
+
+{% include "_nav.html" %}
+
+<header class="page-hero">
+  <h1 class="fade-up">{{ t('plans_hero_h1') }}</h1>
+  <p class="lead fade-up" style="animation-delay:.08s">{{ t('plans_hero_p') }}</p>
+</header>
+
+<section class="section">
+  <div class="plans-grid" id="plansGrid">
+    <div class="plans-empty">{{ t('plans_loading') }}</div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="card cta-band">
+    <div>
+      <h2>{{ t('plans_not_sure_h') }}</h2>
+      <p>{{ t('plans_not_sure_p') }}</p>
+    </div>
+    <a class="btn btn-primary" href="/signup">{{ t('cta_band_btn') }}</a>
+  </div>
+</section>
+
+{% include "_footer.html" %}
+
+<script>
+const PLANS_I18N = {
+  dataAllowance: {{ t('plan_data_allowance', gb='__GB__')|tojson }},
+  validity: {{ t('plan_validity', days='__DAYS__')|tojson }},
+  fullAccess: {{ t('plan_full_access')|tojson }},
+  bestValue: {{ t('plan_best_value')|tojson }},
+  freeTrialTag: {{ t('free_trial_tag')|tojson }},
+  billedOnce: {{ t('plan_billed_once')|tojson }},
+  freeBilling: {{ t('plan_free_billing')|tojson }},
+  choose: {{ t('plan_choose', name='__NAME__')|tojson }},
+  claimFree: {{ t('claim_free_plan')|tojson }},
+  priceFree: {{ t('price_free')|tojson }},
+  empty: {{ t('plans_empty')|tojson }},
+  loadError: {{ t('plans_load_error')|tojson }},
+};
+
+function planFeatures(p) {
+  return `
+    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg> ${PLANS_I18N.dataAllowance.replace('__GB__', p.data_limit_gb)}</li>
+    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg> ${PLANS_I18N.validity.replace('__DAYS__', p.duration_days)}</li>
+    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg> ${PLANS_I18N.fullAccess}</li>
+  `;
+}
+
+async function loadPlans() {
+  const grid = document.getElementById('plansGrid');
+  try {
+    const res = await fetch('/api/plans');
+    const plans = await res.json();
+    if (!plans.length) {
+      grid.innerHTML = `<div class="plans-empty">${PLANS_I18N.empty}</div>`;
+      return;
+    }
+    const paidPlans = plans.filter(p => p.price_usdt > 0);
+    const featuredId = paidPlans.length
+      ? paidPlans.reduce((a, b) => (b.price_usdt > a.price_usdt ? b : a), paidPlans[0]).id
+      : null;
+    grid.innerHTML = plans.map(p => {
+      const isFree = p.price_usdt === 0;
+      const isFeatured = p.id === featuredId;
+      return `
+      <div class="card plan-card ${isFeatured ? 'featured' : ''} ${isFree ? 'free-trial' : ''}">
+        ${isFeatured ? `<div class="tag-featured">${PLANS_I18N.bestValue}</div>` : ''}
+        ${isFree ? `<div class="tag-free">${PLANS_I18N.freeTrialTag}</div>` : ''}
+        <div class="plan-name">${p.name}</div>
+        <div class="plan-price">${isFree ? PLANS_I18N.priceFree : '$' + p.price_usdt}<span> / ${p.duration_days} days</span></div>
+        <div class="plan-meta">${isFree ? PLANS_I18N.freeBilling : PLANS_I18N.billedOnce}</div>
+        <ul class="plan-features">${planFeatures(p)}</ul>
+        <a class="btn ${isFeatured ? 'btn-primary' : 'btn-ghost'} btn-block choose-plan-btn" data-plan="${p.id}" href="/signup?plan=${p.id}">${isFree ? PLANS_I18N.claimFree : PLANS_I18N.choose.replace('__NAME__', p.name)}</a>
+      </div>
+    `;
+    }).join('');
+  } catch (e) {
+    grid.innerHTML = `<div class="plans-empty">${PLANS_I18N.loadError}</div>`;
+  }
+}
+
+async function retargetChooseButtonsIfLoggedIn() {
+  const res = await fetch('/api/auth/me');
+  if (!res.ok) return; // not logged in — /signup?plan= links are correct as-is
+  document.querySelectorAll('.choose-plan-btn').forEach(a => {
+    a.href = `/billing?plan=${a.dataset.plan}`;
+  });
+}
+
+loadPlans().then(retargetChooseButtonsIfLoggedIn);
+</script>
+</body>
+</html>

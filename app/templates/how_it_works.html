@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ t('how_page_title') }} | {{ site_name }}</title>
+{% include "_fonts.html" %}
+</head>
+<body>
+
+{% include "_nav.html" %}
+
+<header class="page-hero">
+  <h1 class="fade-up">{{ t('how_hero_h1') }}</h1>
+  <p class="lead fade-up" style="animation-delay:.08s">{{ t('how_hero_p') }}</p>
+</header>
+
+<section class="section">
+  <div class="steps">
+    <div class="card step-row">
+      <div class="step-num">1</div>
+      <div>
+        <h3>{{ t('how_step1_h') }}</h3>
+        <p>{{ t('how_step1_p') }}</p>
+      </div>
+    </div>
+    <div class="card step-row">
+      <div class="step-num">2</div>
+      <div>
+        <h3>{{ t('how_step2_h') }}</h3>
+        <p>{{ t('how_step2_p') }}</p>
+      </div>
+    </div>
+    <div class="card step-row">
+      <div class="step-num">3</div>
+      <div>
+        <h3>{{ t('how_step3_h') }}</h3>
+        <p>{{ t('how_step3_p_pre') }} <a href="/guide" style="color:var(--accent-2)">{{ t('how_step3_p_link') }}</a> {{ t('how_step3_p_post') }}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="card cta-band">
+    <div>
+      <h2>{{ t('cta_band_h2') }}</h2>
+      <p>{{ t('cta_band_p') }}</p>
+    </div>
+    <a class="btn btn-primary" href="/signup">{{ t('cta_band_btn') }}</a>
+  </div>
+</section>
+
+{% include "_footer.html" %}
+</body>
+</html>

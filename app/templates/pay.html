@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ t('pay_page_title') }} | {{ site_name }}</title>
+{% include "_fonts.html" %}
+<style>
+  .page-wrap { padding: 40px 16px 100px; }
+  .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text-faint); font-size: 13px; margin-bottom: 18px; }
+  .back-link:hover { color: var(--text-dim); }
+  h1.title { font-size: 15px; color: var(--text-dim); font-weight: 600; margin-bottom: 4px; }
+  .order-id { color: var(--text-faint); font-family: var(--font-display); }
+
+  .amount { font-size: 40px; font-weight: 700; font-family: var(--font-display); margin: 6px 0 2px; word-break: break-all;
+    background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .amount-label { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .method-label { font-size: 12.5px; color: var(--text-dim); margin-top: 4px; }
+
+  .row-block { margin: 20px 0; }
+  .row-label { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; font-weight: 600; }
+
+  .link-box {
+    background: rgba(0,0,0,0.25); border: 1px solid rgba(52,211,153,0.4); border-radius: var(--radius-sm);
+    padding: 15px; font-size: 12.5px; word-break: break-all; margin-top: 8px; color: var(--success);
+  }
+  .note { font-size: 12.5px; color: var(--text-dim); line-height: 1.8; margin-top: 22px; }
+  .crypto-box { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
+  .success-text { color: var(--success); font-size: 12.5px; margin-top: 10px; }
+  .crypto-amount {
+    font-size: 26px; font-weight: 700; font-family: var(--font-display); color: var(--success);
+    margin: 4px 0 14px;
+  }
+  .crypto-warning {
+    background: var(--warning-soft); border: 1px solid rgba(251,191,36,0.4); border-radius: var(--radius);
+    padding: 16px 18px; margin: 16px 0; font-size: 13.5px; line-height: 1.7; color: #ffe6a8;
+  }
+  .crypto-warning .cw-title {
+    display: flex; align-items: center; gap: 7px; color: var(--warning); font-weight: 700;
+    font-size: 13.5px; margin-bottom: 8px;
+  }
+  .crypto-warning p { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+{% include "_nav.html" %}
+
+<div class="page-wrap">
+  <div class="container-narrow">
+    <a class="back-link" href="/dashboard">{{ '→' if dir == 'rtl' else '←' }} {{ t('pay_back_link') }}</a>
+    <div class="card card-pad fade-up">
+      <h1 class="title">{{ t('pay_order_label') }} <span class="order-id">#<span id="orderId"></span></span></h1>
+
+      <div class="amount-label">{{ t('pay_total_label') }}</div>
+      <div class="amount" id="amount">—</div>
+      <div class="method-label" id="methodLabel"></div>
+
+      <div id="statusBadge" style="margin-top:20px"></div>
+
+      <div id="continueBox" style="display:none;margin-top:16px">
+        <a class="btn btn-primary btn-block" id="continueLink" href="#">{{ t('pay_continue') }}</a>
+      </div>
+
+      <div id="cryptoPaymentBox" class="crypto-box" style="display:none">
+        <div class="row-label">{{ t('pay_crypto_send_to') }} <span id="cryptoNetworkLabel" style="color:var(--accent-2)"></span></div>
+        <div class="crypto-amount" id="cryptoAmount">—</div>
+        <div class="link-box" id="walletAddress">—</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="copyWalletAddress()">{{ t('pay_crypto_copy_address') }}</button>
+        <div class="crypto-warning">
+          <div class="cw-title">⚠️ {{ t('pay_crypto_warning_title') }}</div>
+          <p>{{ t('pay_crypto_instructions') }}</p>
+          <p id="cryptoNetworkNote"></p>
+        </div>
+        <label for="txHashInput">{{ t('pay_crypto_tx_label') }}</label>
+        <input id="txHashInput" placeholder="{{ t('pay_crypto_tx_placeholder') }}">
+        <button class="btn btn-primary btn-block" id="verifyBtn" onclick="verifyPayment()">{{ t('pay_crypto_verify_btn') }}</button>
+        <div class="field-error" id="verifyErr"></div>
+        <div class="success-text" id="verifySuccess" style="display:none"></div>
+      </div>
+
+      <div id="cancelBox" style="display:none;margin-top:10px">
+        <button class="btn btn-ghost btn-sm" onclick="cancelThisOrder()">{{ t('pay_cancel_btn') }}</button>
+      </div>
+
+      <div id="resultBox"></div>
+
+      <p class="note">
+        {{ t('pay_note_pre') }} <a href="/dashboard" style="color:var(--accent-2)">{{ t('pay_note_dashboard_link') }}</a>.
+        {{ t('pay_note_mid') }} <a href="/guide" style="color:var(--accent-2)">{{ t('pay_note_guide_link') }}</a>.
+      </p>
+    </div>
+  </div>
+</div>
+
+{% include "_footer.html" %}
+
+<script>
+const PAY_I18N = {
+  methodCard: {{ t('pay_method_card')|tojson }},
+  methodCrypto: {{ t('pay_method_crypto')|tojson }},
+  methodFree: {{ t('pay_method_free')|tojson }},
+  statusLabels: {
+    pending: {{ t('pay_status_pending')|tojson }},
+    paid: {{ t('pay_status_paid')|tojson }},
+    provisioned: {{ t('pay_status_provisioned')|tojson }},
+    expired: {{ t('pay_status_expired')|tojson }},
+    failed: {{ t('pay_status_failed')|tojson }},
+    cancelled: {{ t('pay_status_cancelled')|tojson }},
+  },
+  vpnLinkLabel: {{ t('pay_vpn_link_label')|tojson }},
+  copyLink: {{ t('pay_copy_link')|tojson }},
+  priceFree: {{ t('price_free')|tojson }},
+  cancelConfirm: {{ t('billing_cancel_confirm')|tojson }},
+  cancelError: {{ t('billing_cancel_error')|tojson }},
+  verifyBtn: {{ t('pay_crypto_verify_btn')|tojson }},
+  verifying: {{ t('pay_crypto_verifying')|tojson }},
+  verifySuccess: {{ t('pay_crypto_success')|tojson }},
+  copyAddress: {{ t('pay_crypto_copy_address')|tojson }},
+  copied: {{ t('pay_copy_link')|tojson }},
+  networkTron: {{ t('network_tron')|tojson }},
+  networkPolygon: {{ t('network_polygon')|tojson }},
+  networkNoteTron: {{ t('pay_crypto_network_note_tron')|tojson }},
+  networkNotePolygon: {{ t('pay_crypto_network_note_polygon')|tojson }},
+};
+
+const orderId = window.location.pathname.split('/').pop();
+document.getElementById('orderId').textContent = orderId;
+
+let cryptoNetworks = {};
+
+async function loadWalletAddress() {
+  const res = await fetch('/api/payments/methods');
+  if (!res.ok) return;
+  const data = await res.json();
+  cryptoNetworks = data.crypto_networks || {};
+}
+
+function copyWalletAddress() {
+  const el = document.getElementById('walletAddress');
+  if (el.textContent === '—') return;
+  navigator.clipboard.writeText(el.textContent);
+}
+
+async function verifyPayment() {
+  const err = document.getElementById('verifyErr');
+  const success = document.getElementById('verifySuccess');
+  err.style.display = 'none';
+  success.style.display = 'none';
+  const txHash = document.getElementById('txHashInput').value.trim();
+  if (!txHash) return;
+  const btn = document.getElementById('verifyBtn');
+  btn.disabled = true;
+  btn.textContent = PAY_I18N.verifying;
+  try {
+    const res = await fetch(`/api/orders/${orderId}/verify-payment`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tx_hash: txHash})
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      err.textContent = (typeof data.detail === 'string' ? data.detail : data.detail?.[0]?.msg) || 'Error';
+      err.style.display = 'block';
+      return;
+    }
+    success.textContent = PAY_I18N.verifySuccess;
+    success.style.display = 'block';
+    document.getElementById('txHashInput').value = '';
+    poll();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = PAY_I18N.verifyBtn;
+  }
+}
+
+function updateCryptoBox(order) {
+  const box = document.getElementById('cryptoPaymentBox');
+  const network = order.crypto_network || 'tron';
+  const address = cryptoNetworks[network];
+  const show = order.payment_method === 'crypto' && order.status === 'pending' && !!address;
+  box.style.display = show ? 'block' : 'none';
+  if (show) {
+    document.getElementById('walletAddress').textContent = address;
+    document.getElementById('cryptoAmount').textContent = order.amount_due + ' USDT';
+    document.getElementById('cryptoNetworkLabel').textContent =
+      '(' + (network === 'polygon' ? PAY_I18N.networkPolygon : PAY_I18N.networkTron) + ')';
+    document.getElementById('cryptoNetworkNote').textContent =
+      network === 'polygon' ? PAY_I18N.networkNotePolygon : PAY_I18N.networkNoteTron;
+  }
+}
+
+async function fetchCheckoutUrl() {
+  const res = await fetch(`/api/orders/${orderId}/checkout`, {method: 'POST'});
+  if (!res.ok) return; // order isn't pending (already paid/expired/cancelled) — nothing to link to
+  const order = await res.json();
+  if (order.checkout_url) {
+    document.getElementById('continueBox').style.display = 'block';
+    document.getElementById('continueLink').href = order.checkout_url;
+  }
+}
+
+function badge(status) {
+  const map = {
+    pending: 'badge-warning badge-pulse',
+    paid: 'badge-success badge-pulse',
+    provisioned: 'badge-success',
+    expired: 'badge-danger',
+    failed: 'badge-danger',
+    cancelled: 'badge-neutral',
+  };
+  const cls = map[status] || 'badge-warning';
+  const label = PAY_I18N.statusLabels[status] || status;
+  return `<span class="badge ${cls}"><span class="badge-dot"></span>${label}</span>`;
+}
+
+async function poll() {
+  const res = await fetch(`/api/orders/${orderId}`);
+  if (!res.ok) return;
+  const order = await res.json();
+
+  document.getElementById('amount').textContent = order.amount_due === 0 ? PAY_I18N.priceFree :
+    order.payment_method === 'crypto' ? order.amount_due + ' USDT' : '$' + order.amount_due;
+  document.getElementById('methodLabel').textContent =
+    order.payment_method === 'card' ? PAY_I18N.methodCard :
+    order.payment_method === 'crypto' ? PAY_I18N.methodCrypto + ' (' + (order.crypto_network === 'polygon' ? PAY_I18N.networkPolygon : PAY_I18N.networkTron) + ')' :
+    PAY_I18N.methodFree;
+  document.getElementById('statusBadge').innerHTML = badge(order.status);
+  document.getElementById('cancelBox').style.display = order.status === 'pending' ? 'block' : 'none';
+  updateCryptoBox(order);
+  if (order.status !== 'pending') {
+    document.getElementById('continueBox').style.display = 'none';
+  }
+
+  if (order.status === 'provisioned' && order.subscription_url) {
+    document.getElementById('resultBox').innerHTML = `
+      <div class="row-block">
+        <div class="row-label">${PAY_I18N.vpnLinkLabel}</div>
+        <div class="link-box">${order.subscription_url}</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="navigator.clipboard.writeText('${order.subscription_url}')">${PAY_I18N.copyLink}</button>
+      </div>
+    `;
+    return; // stop polling once delivered
+  }
+
+  if (order.status === 'pending') {
+    setTimeout(poll, 5000);
+  }
+}
+
+async function cancelThisOrder() {
+  if (!confirm(PAY_I18N.cancelConfirm)) return;
+  const res = await fetch(`/api/orders/${orderId}/cancel`, {method: 'POST'});
+  if (!res.ok) {
+    const data = await res.json();
+    showToast(data.detail || PAY_I18N.cancelError, 'error');
+    return;
+  }
+  window.location.href = '/dashboard';
+}
+
+loadWalletAddress().then(poll);
+fetchCheckoutUrl();
+</script>
+</body>
+</html>

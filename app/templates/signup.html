@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ t('signup_page_title') }} | {{ site_name }}</title>
+{% include "_fonts.html" %}
+<style>
+  .auth-wrap { min-height: calc(100vh - 200px); display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
+  .auth-card { width: 100%; max-width: 420px; padding: 34px; }
+  h1.title { font-size: 20px; text-align: center; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: var(--text-dim); font-size: 13.5px; margin-bottom: 28px; line-height: 1.7; }
+  .foot-link { text-align: center; margin-top: 18px; font-size: 13px; color: var(--text-dim); }
+  .foot-link a { color: var(--accent-2); font-weight: 600; }
+  .terms-note { text-align: center; margin-top: 8px; font-size: 12px; color: var(--text-faint); }
+  .terms-note a { color: var(--text-dim); }
+  .signup-perk {
+    display: flex; justify-content: center; align-items: center; gap: 6px;
+    text-align: center; margin: 0 auto 22px; padding: 8px 14px; border-radius: 999px;
+    background: var(--success-soft); color: var(--success); font-size: 12px; font-weight: 600;
+    width: fit-content;
+  }
+</style>
+</head>
+<body>
+
+{% include "_nav.html" %}
+
+<div class="auth-wrap">
+  <div class="card auth-card fade-up">
+    <h1 class="title">{{ t('signup_h1') }}</h1>
+    <p class="subtitle">{{ t('signup_p') }}</p>
+    <div class="signup-perk">🎁 {{ t('signup_perk') }}</div>
+    <form id="signupForm">
+      <label for="username">{{ t('signup_username') }}</label>
+      <input id="username" autocomplete="username" required pattern="[a-zA-Z0-9]{3,20}">
+      <label for="email">{{ t('signup_email') }}</label>
+      <input id="email" type="email" autocomplete="email" required>
+      <label for="password">{{ t('signup_password') }} <span class="faint">{{ t('signup_password_hint') }}</span></label>
+      <input id="password" type="password" autocomplete="new-password" required minlength="6">
+      <label for="confirmPassword">{{ t('signup_confirm_password') }}</label>
+      <input id="confirmPassword" type="password" autocomplete="new-password" required minlength="6">
+      <label for="contact">{{ t('signup_contact') }} <span class="faint">{{ t('signup_contact_hint') }}</span></label>
+      <input id="contact" placeholder="{{ t('signup_contact_placeholder') }}">
+      <button class="btn btn-primary btn-block" type="submit">{{ t('signup_submit') }}</button>
+      <div class="field-error" id="err"></div>
+    </form>
+    <div class="foot-link">{{ t('signup_have_account') }} <a href="/login" id="loginLink">{{ t('signup_login_link') }}</a></div>
+    <div class="terms-note">{{ t('signup_terms_prefix') }} <a href="/terms" target="_blank">{{ t('signup_terms_link') }}</a></div>
+  </div>
+</div>
+
+{% include "_footer.html" %}
+
+<script>
+const SIGNUP_I18N = {
+  mismatch: {{ t('signup_passwords_mismatch')|tojson }},
+  error: {{ t('signup_error_generic')|tojson }},
+};
+const wantedPlan = new URLSearchParams(window.location.search).get('plan');
+if (wantedPlan) {
+  document.getElementById('loginLink').href = `/login?plan=${wantedPlan}`;
+}
+
+document.getElementById('signupForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = document.getElementById('err');
+  err.style.display = 'none';
+
+  const password = document.getElementById('password').value;
+  const confirmPassword = document.getElementById('confirmPassword').value;
+  if (password !== confirmPassword) {
+    err.textContent = SIGNUP_I18N.mismatch;
+    err.style.display = 'block';
+    return;
+  }
+
+  const res = await fetch('/api/auth/signup', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      username: document.getElementById('username').value,
+      email: document.getElementById('email').value,
+      password: password,
+      confirm_password: confirmPassword,
+      contact: document.getElementById('contact').value || null
+    })
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    err.textContent = (typeof data.detail === 'string' ? data.detail : data.detail?.[0]?.msg) || SIGNUP_I18N.error;
+    err.style.display = 'block';
+    return;
+  }
+  window.location.href = wantedPlan ? `/billing?plan=${wantedPlan}` : '/dashboard?verify=pending';
+});
+</script>
+</body>
+</html>

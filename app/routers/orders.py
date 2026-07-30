@@ -1,0 +1,269 @@
+from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app import i18n
+from app.auth import get_current_customer
+from app.config import settings
+from app.database import get_db
+from app.lang import get_lang
+from app.models import Customer, Order, OrderStatus, PaymentMethod, Plan
+from app.schemas import OrderCreate, OrderOut, VerifyPaymentIn
+from app.services import order_service, polygon_gateway, stripe_gateway, tron_gateway
+
+CRYPTO_GATEWAYS = {"tron": tron_gateway, "polygon": polygon_gateway}
+
+router = APIRouter(prefix="/api/orders", tags=["orders"])
+
+
+@router.post("", response_model=OrderOut)
+async def create_order(
+    payload: OrderCreate,
+    customer: Customer = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+    lang: str = Depends(get_lang),
+):
+    if customer.is_banned:
+        reason = customer.ban_reason or i18n.t(lang, "err_account_suspended_generic")
+        raise HTTPException(403, i18n.t(lang, "err_account_suspended", reason=reason))
+    if not customer.email_verified:
+        raise HTTPException(403, i18n.t(lang, "err_verify_email_first"))
+
+    plan = db.query(Plan).filter(Plan.id == payload.plan_id, Plan.is_active.is_(True)).first()
+    if not plan:
+        raise HTTPException(404, i18n.t(lang, "err_plan_not_found"))
+
+    already_has_account = (
+        db.query(Order)
+        .filter(Order.customer_id == customer.id, Order.status == OrderStatus.provisioned)
+        .first()
+        is not None
+    )
+
+    # Free trial plans skip payment entirely — claimed once per account,
+    # ever, provisioned immediately instead of going through a checkout
+    # session.
+    if plan.price_usdt == 0:
+        # Lock the customer row for the duration of the check-and-create so
+        # a fast double-click / retry-before-response can't pass the
+        # "already claimed" check twice concurrently (both requests would
+        # see zero prior orders before either commits) and end up creating
+        # two separate free-plan orders. Released on the commit just below.
+        db.query(Customer).filter(Customer.id == customer.id).with_for_update().first()
+
+        # Any prior attempt at all — not just paid/provisioned — counts as
+        # the one-time claim being used. Pending/cancelled/failed attempts
+        # still count: this is what the row lock above actually protects,
+        # since a concurrent request's order might not be paid yet the
+        # instant this check runs.
+        already_claimed = (
+            db.query(Order)
+            .filter(Order.customer_id == customer.id, Order.plan_id == plan.id)
+            .first()
+        )
+        if already_claimed:
+            raise HTTPException(409, i18n.t(lang, "err_free_plan_already_used"))
+
+        order = Order(
+            customer_id=customer.id,
+            plan_id=plan.id,
+            is_renewal=already_has_account,
+            payment_method=PaymentMethod.free,
+            amount_due=0,
+            status=OrderStatus.pending,
+            expires_at=datetime.utcnow() + timedelta(minutes=settings.ORDER_EXPIRY_MINUTES),
+        )
+        db.add(order)
+        db.commit()
+        db.refresh(order)
+
+        # Local import to avoid a circular import at module load time
+        # (payments.py doesn't import orders.py, so this is safe).
+        from app.routers.payments import _mark_paid_and_provision
+        await _mark_paid_and_provision(order.id)
+        db.refresh(order)
+
+        return OrderOut.model_validate(order)
+
+    try:
+        method = PaymentMethod(payload.payment_method)
+    except ValueError:
+        raise HTTPException(400, i18n.t(lang, "err_invalid_payment_method"))
+
+    if method == PaymentMethod.card and not stripe_gateway.is_configured():
+        raise HTTPException(400, i18n.t(lang, "err_card_unavailable"))
+
+    crypto_network = None
+    if method == PaymentMethod.crypto:
+        crypto_network = (payload.crypto_network or "tron").strip().lower()
+        gateway = CRYPTO_GATEWAYS.get(crypto_network)
+        if not gateway:
+            raise HTTPException(400, i18n.t(lang, "err_invalid_payment_method"))
+        if not gateway.is_configured():
+            raise HTTPException(400, i18n.t(lang, "err_crypto_unavailable"))
+
+    pending_order = (
+        db.query(Order)
+        .filter(Order.customer_id == customer.id, Order.status == OrderStatus.pending)
+        .first()
+    )
+    if pending_order:
+        raise HTTPException(409, i18n.t(lang, "err_pending_order_exists"))
+
+    order = Order(
+        customer_id=customer.id,
+        plan_id=plan.id,
+        is_renewal=already_has_account,  # server decides this, not the client
+        payment_method=method,
+        crypto_network=crypto_network,
+        amount_due=plan.price_usdt,  # fixed price — the gateway tells us which order was paid, not amount matching
+        status=OrderStatus.pending,
+        expires_at=datetime.utcnow() + timedelta(minutes=settings.ORDER_EXPIRY_MINUTES),
+    )
+    db.add(order)
+    db.commit()
+    db.refresh(order)
+
+    checkout_url = await order_service.create_checkout(db, order, plan)
+
+    result = OrderOut.model_validate(order)
+    result.checkout_url = checkout_url
+    return result
+
+
+@router.post("/{order_id}/verify-payment", response_model=OrderOut)
+async def verify_payment(
+    order_id: str,
+    payload: VerifyPaymentIn,
+    customer: Customer = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+    lang: str = Depends(get_lang),
+):
+    """Customer submits the hash of their on-chain USDT transfer to our
+    wallet. Verified directly against the relevant blockchain (recipient,
+    amount, contract, success, confirmation) before the order is marked
+    paid — see app/services/tron_gateway.py for why a tx hash rather than
+    amount-matching is safe even under many concurrent payments. Routes to
+    the gateway matching the network the customer chose at checkout
+    (order.crypto_network)."""
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id, Order.customer_id == customer.id)
+        .first()
+    )
+    if not order:
+        raise HTTPException(404, i18n.t(lang, "err_order_not_found"))
+    if order.status != OrderStatus.pending:
+        raise HTTPException(409, i18n.t(lang, "err_order_no_longer_pending"))
+    if order.payment_method != PaymentMethod.crypto:
+        raise HTTPException(400, i18n.t(lang, "err_invalid_payment_method"))
+
+    gateway = CRYPTO_GATEWAYS.get(order.crypto_network or "tron")
+    if not gateway:
+        raise HTTPException(400, i18n.t(lang, "err_invalid_payment_method"))
+
+    try:
+        await run_in_threadpool(gateway.verify_transaction, payload.tx_hash, order.amount_due)
+    except (tron_gateway.TronVerificationError, polygon_gateway.PolygonVerificationError) as e:
+        raise HTTPException(400, i18n.t(lang, f"err_crypto_{e.code}"))
+
+    # Set tx_hash in its own commit first — the column's unique constraint
+    # is what actually prevents the same transaction being credited twice
+    # under a race (two requests reusing one hash concurrently); everything
+    # else here is defense in depth, not the real guarantee.
+    order.tx_hash = payload.tx_hash.strip().lower().removeprefix("0x")
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, i18n.t(lang, "err_tx_hash_already_used"))
+
+    from app.routers.payments import _mark_paid_and_provision
+    await _mark_paid_and_provision(order.id)
+    db.refresh(order)
+    return OrderOut.model_validate(order)
+
+
+@router.post("/{order_id}/checkout", response_model=OrderOut)
+async def resume_checkout(
+    order_id: str,
+    customer: Customer = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+    lang: str = Depends(get_lang),
+):
+    """Gets a working hosted-payment-page link for a pending order —
+    used when the customer returns to the pay page without a cached
+    checkout URL (new tab, different device, closed the original one)."""
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id, Order.customer_id == customer.id)
+        .first()
+    )
+    if not order:
+        raise HTTPException(404, i18n.t(lang, "err_order_not_found"))
+    if order.status != OrderStatus.pending:
+        raise HTTPException(409, i18n.t(lang, "err_order_no_longer_pending"))
+
+    plan = db.query(Plan).filter(Plan.id == order.plan_id).first()
+    checkout_url = await order_service.create_checkout(db, order, plan)
+
+    result = OrderOut.model_validate(order)
+    result.checkout_url = checkout_url
+    return result
+
+
+@router.post("/{order_id}/cancel", response_model=OrderOut)
+def cancel_order(
+    order_id: str,
+    customer: Customer = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+    lang: str = Depends(get_lang),
+):
+    """Lets a customer abandon their own pending order — mainly so they can
+    switch payment methods (e.g. picked crypto, wants to try card instead)
+    without waiting out the full order expiry window."""
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id, Order.customer_id == customer.id)
+        .first()
+    )
+    if not order:
+        raise HTTPException(404, i18n.t(lang, "err_order_not_found"))
+    if order.status != OrderStatus.pending:
+        raise HTTPException(409, i18n.t(lang, "err_only_pending_cancellable"))
+
+    order_service.cancel_pending_order(db, order)
+    return order
+
+
+@router.get("/{order_id}", response_model=OrderOut)
+def get_order(
+    order_id: str,
+    customer: Customer = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+    lang: str = Depends(get_lang),
+):
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id, Order.customer_id == customer.id)
+        .first()
+    )
+    if not order:
+        raise HTTPException(404, i18n.t(lang, "err_order_not_found"))
+    return order
+
+
+@router.get("", response_model=list[OrderOut])
+def my_orders(
+    customer: Customer = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+):
+    return (
+        db.query(Order)
+        .filter(Order.customer_id == customer.id)
+        .order_by(Order.created_at.desc())
+        .all()
+    )

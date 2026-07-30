@@ -1,0 +1,28 @@
+# Secrets — never commit real credentials
+.env
+
+# Local Python env / caches
+.venv/
+__pycache__/
+*.pyc
+
+# Local dev database
+freemiga.db
+
+# Local dev override (README explains why this must stay out of prod too)
+docker-compose.override.yml
+
+# Runtime data — uploaded at runtime, not part of the source tree
+app/static/uploads/
+
+# MaxMind GeoLite2 DB — user-supplied under their own license (see README),
+# not redistributed via the repo
+app/data/*.mmdb
+
+# Claude Code session state
+.claude/
+
+# Misc local test artifacts
+freetest_cookie.txt
+cookies_*.txt
+*.cookie

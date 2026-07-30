@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ t('login_page_title') }} | {{ site_name }}</title>
+{% include "_fonts.html" %}
+<style>
+  .auth-wrap { min-height: calc(100vh - 200px); display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
+  .auth-card { width: 100%; max-width: 400px; padding: 34px; }
+  h1.title { font-size: 20px; text-align: center; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: var(--text-dim); font-size: 13.5px; margin-bottom: 28px; }
+  .foot-link { text-align: center; margin-top: 18px; font-size: 13px; color: var(--text-dim); }
+  .foot-link a { color: var(--accent-2); font-weight: 600; }
+  .link-row { text-align: center; margin-top: 10px; font-size: 12.5px; }
+  .link-row a { color: var(--text-faint); }
+  .link-row a:hover { color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+{% include "_nav.html" %}
+
+<div class="auth-wrap">
+    <div class="card auth-card fade-up">
+      <h1 class="title">{{ t('login_h1') }}</h1>
+      <p class="subtitle">{{ t('login_p') }}</p>
+
+      <form id="loginForm">
+        <label for="username">{{ t('login_username') }}</label>
+        <input id="username" autocomplete="username" required>
+        <label for="password">{{ t('login_password') }}</label>
+        <input id="password" type="password" autocomplete="current-password" required>
+        <button class="btn btn-primary btn-block" type="submit">{{ t('login_submit') }}</button>
+        <div class="field-error" id="err"></div>
+      </form>
+
+      <div class="foot-link">{{ t('login_no_account') }} <a href="/signup" id="signupLink">{{ t('login_signup_link') }}</a></div>
+      <div class="link-row"><a href="/forgot-password">{{ t('login_forgot') }}</a></div>
+    </div>
+</div>
+
+{% include "_footer.html" %}
+
+<script>
+const LOGIN_I18N = {
+  loginError: {{ t('login_error_generic')|tojson }},
+};
+const wantedPlan = new URLSearchParams(window.location.search).get('plan');
+if (wantedPlan) {
+  document.getElementById('signupLink').href = `/signup?plan=${wantedPlan}`;
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = document.getElementById('err');
+  err.style.display = 'none';
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      username: document.getElementById('username').value,
+      password: document.getElementById('password').value
+    })
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    err.textContent = data.detail || LOGIN_I18N.loginError;
+    err.style.display = 'block';
+    return;
+  }
+  window.location.href = wantedPlan ? `/billing?plan=${wantedPlan}` : '/dashboard';
+});
+</script>
+</body>
+</html>

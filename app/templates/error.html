@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ code }} | {{ site_name }}</title>
+{% include "_fonts.html" %}
+<style>
+  .err-wrap { min-height: calc(100vh - 200px); display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
+  .err-card { max-width: 400px; text-align: center; padding: 44px 32px; }
+  .code {
+    font-family: var(--font-display); font-size: 56px; font-weight: 700; margin: 0 0 10px;
+    {% if code >= 500 %}
+    color: var(--danger);
+    {% else %}
+    background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent;
+    {% endif %}
+  }
+  .msg { font-size: 14px; color: var(--text-dim); margin: 0 0 26px; line-height: 1.8; }
+</style>
+</head>
+<body>
+
+{% include "_nav.html" %}
+
+<div class="err-wrap">
+  <div class="card err-card fade-up">
+    <div class="code">{{ code }}</div>
+    <p class="msg">{{ message }}</p>
+    <a class="btn btn-primary" href="/">{{ t('error_go_home') }}</a>
+  </div>
+</div>
+
+{% include "_footer.html" %}
+
+</body>
+</html>
