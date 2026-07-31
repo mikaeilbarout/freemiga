@@ -90,8 +90,12 @@
         <span class="list-count" id="customerCount"></span>
       </div>
       <div class="list-container" id="customerRows"></div>
-      <div class="load-more-row" id="customerLoadMoreRow" style="display:none">
-        <button class="btn btn-ghost btn-sm" onclick="loadMoreCustomers()">Load more</button>
+      <div class="load-more-row" id="customerPaginationRow" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:center;gap:14px">
+          <button class="btn btn-ghost btn-sm" id="customerPrevBtn" onclick="changeCustomersPage(-1)">← Prev</button>
+          <span id="customerPageIndicator" style="font-size:12.5px;color:var(--text-dim)"></span>
+          <button class="btn btn-ghost btn-sm" id="customerNextBtn" onclick="changeCustomersPage(1)">Next →</button>
+        </div>
       </div>
     </div>
 
@@ -127,8 +131,12 @@
         <span class="list-count" id="ticketCount"></span>
       </div>
       <div id="ticketCards"></div>
-      <div class="load-more-row" id="ticketLoadMoreRow" style="display:none">
-        <button class="btn btn-ghost btn-sm" onclick="loadMoreTickets()">Load more</button>
+      <div class="load-more-row" id="ticketPaginationRow" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:center;gap:14px">
+          <button class="btn btn-ghost btn-sm" id="ticketPrevBtn" onclick="changeTicketsPage(-1)">← Prev</button>
+          <span id="ticketPageIndicator" style="font-size:12.5px;color:var(--text-dim)"></span>
+          <button class="btn btn-ghost btn-sm" id="ticketNextBtn" onclick="changeTicketsPage(1)">Next →</button>
+        </div>
       </div>
     </div>
 
@@ -140,8 +148,12 @@
         <span class="list-count" id="auditCount"></span>
       </div>
       <div class="list-container" id="auditRows"></div>
-      <div class="load-more-row" id="auditLoadMoreRow" style="display:none">
-        <button class="btn btn-ghost btn-sm" onclick="loadMoreAuditLog()">Load more</button>
+      <div class="load-more-row" id="auditPaginationRow" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:center;gap:14px">
+          <button class="btn btn-ghost btn-sm" id="auditPrevBtn" onclick="changeAuditPage(-1)">← Prev</button>
+          <span id="auditPageIndicator" style="font-size:12.5px;color:var(--text-dim)"></span>
+          <button class="btn btn-ghost btn-sm" id="auditNextBtn" onclick="changeAuditPage(1)">Next →</button>
+        </div>
       </div>
     </div>
   </div>
@@ -176,12 +188,22 @@ async function adminLogin() {
   loadCustomers(); loadOrders(); loadTickets(); loadAuditLog(); loadPlans(); loadBanners();
 }
 
-const PAGE_SIZE = 25;
-const ORDER_PAGE_SIZE = 10;
+const ADMIN_PAGE_SIZE = 10;
 let customerPage = 1, customerSearchTimer = null;
 let orderPage = 1, orderSearchTimer = null;
 let ticketPage = 1;
 let auditPage = 1;
+
+// Shared prev/next pagination bar — every growing admin list (customers,
+// orders, tickets, audit log) uses the same {prefix}PaginationRow /
+// {prefix}PageIndicator / {prefix}PrevBtn / {prefix}NextBtn markup.
+function renderPaginationBar(prefix, page, total) {
+  const totalPages = Math.max(1, Math.ceil(total / ADMIN_PAGE_SIZE));
+  document.getElementById(`${prefix}PaginationRow`).style.display = total > ADMIN_PAGE_SIZE ? 'block' : 'none';
+  document.getElementById(`${prefix}PageIndicator`).textContent = `Page ${page} of ${totalPages}`;
+  document.getElementById(`${prefix}PrevBtn`).disabled = page <= 1;
+  document.getElementById(`${prefix}NextBtn`).disabled = page >= totalPages;
+}
 
 function customerRowHtml(c) {
   return `
@@ -207,22 +229,17 @@ function customerRowHtml(c) {
 async function loadCustomers(reset = true) {
   if (reset) { customerPage = 1; }
   const search = document.getElementById('customerSearch').value.trim();
-  const params = new URLSearchParams({page: customerPage, page_size: PAGE_SIZE, search});
+  const params = new URLSearchParams({page: customerPage, page_size: ADMIN_PAGE_SIZE, search});
   const res = await fetch(`/api/admin/customers?${params}`);
   if (!res.ok) return;
   const data = await res.json();
   const container = document.getElementById('customerRows');
-  const html = data.items.map(customerRowHtml).join('');
-  if (reset) {
-    container.innerHTML = html || '<div class="empty-state">No customers found</div>';
-  } else {
-    container.insertAdjacentHTML('beforeend', html);
-  }
+  container.innerHTML = data.items.map(customerRowHtml).join('') || '<div class="empty-state">No customers found</div>';
   document.getElementById('customerCount').textContent = `${data.total} total`;
-  document.getElementById('customerLoadMoreRow').style.display = customerPage * PAGE_SIZE < data.total ? 'block' : 'none';
+  renderPaginationBar('customer', customerPage, data.total);
 }
 
-function loadMoreCustomers() { customerPage++; loadCustomers(false); }
+function changeCustomersPage(delta) { customerPage += delta; loadCustomers(false); }
 
 document.getElementById('customerSearch').addEventListener('input', () => {
   clearTimeout(customerSearchTimer);
@@ -269,7 +286,7 @@ async function loadOrders(reset = true) {
   if (reset) { orderPage = 1; }
   const status = document.getElementById('orderStatusFilter').value;
   const q = document.getElementById('orderSearch').value.trim();
-  const params = new URLSearchParams({page: orderPage, page_size: ORDER_PAGE_SIZE, status});
+  const params = new URLSearchParams({page: orderPage, page_size: ADMIN_PAGE_SIZE, status});
   if (q) params.set('q', q);
   const res = await fetch(`/api/admin/orders?${params}`);
   if (!res.ok) return;
@@ -277,12 +294,7 @@ async function loadOrders(reset = true) {
   const container = document.getElementById('orderRows');
   container.innerHTML = data.items.map(orderRowHtml).join('') || '<div class="empty-state">No orders found</div>';
   document.getElementById('orderCount').textContent = `${data.total} total`;
-
-  const totalPages = Math.max(1, Math.ceil(data.total / ORDER_PAGE_SIZE));
-  document.getElementById('orderPaginationRow').style.display = data.total > ORDER_PAGE_SIZE ? 'block' : 'none';
-  document.getElementById('orderPageIndicator').textContent = `Page ${orderPage} of ${totalPages}`;
-  document.getElementById('orderPrevBtn').disabled = orderPage <= 1;
-  document.getElementById('orderNextBtn').disabled = orderPage >= totalPages;
+  renderPaginationBar('order', orderPage, data.total);
 }
 
 function changeOrdersPage(delta) {
@@ -371,20 +383,15 @@ async function loadTickets(reset = true) {
   if (reset) { ticketPage = 1; }
   const openOnly = document.getElementById('ticketOpenOnly').checked;
   const q = document.getElementById('ticketSearch').value.trim();
-  const params = new URLSearchParams({page: ticketPage, page_size: PAGE_SIZE, open_only: openOnly});
+  const params = new URLSearchParams({page: ticketPage, page_size: ADMIN_PAGE_SIZE, open_only: openOnly});
   if (q) params.set('q', q);
   const res = await fetch(`/api/admin/tickets?${params}`);
   if (!res.ok) return;
   const data = await res.json();
   const container = document.getElementById('ticketCards');
-  const html = data.items.map(ticketCardHtml).join('');
-  if (reset) {
-    container.innerHTML = html || '<div class="empty-state">No tickets found</div>';
-  } else {
-    container.insertAdjacentHTML('beforeend', html);
-  }
+  container.innerHTML = data.items.map(ticketCardHtml).join('') || '<div class="empty-state">No tickets found</div>';
   document.getElementById('ticketCount').textContent = `${data.total} total`;
-  document.getElementById('ticketLoadMoreRow').style.display = ticketPage * PAGE_SIZE < data.total ? 'block' : 'none';
+  renderPaginationBar('ticket', ticketPage, data.total);
 }
 
 document.getElementById('ticketSearch').addEventListener('input', () => {
@@ -392,7 +399,7 @@ document.getElementById('ticketSearch').addEventListener('input', () => {
   ticketSearchTimer = setTimeout(() => loadTickets(true), 350);
 });
 
-function loadMoreTickets() { ticketPage++; loadTickets(false); }
+function changeTicketsPage(delta) { ticketPage += delta; loadTickets(false); }
 
 async function replyTicket(id) {
   const message = document.getElementById(`reply-${id}`).value.trim();
@@ -623,22 +630,17 @@ function auditRowHtml(l) {
 
 async function loadAuditLog(reset = true) {
   if (reset) { auditPage = 1; }
-  const params = new URLSearchParams({page: auditPage, page_size: PAGE_SIZE});
+  const params = new URLSearchParams({page: auditPage, page_size: ADMIN_PAGE_SIZE});
   const res = await fetch(`/api/admin/audit-log?${params}`);
   if (!res.ok) return;
   const data = await res.json();
   const container = document.getElementById('auditRows');
-  const html = data.items.map(auditRowHtml).join('');
-  if (reset) {
-    container.innerHTML = html || '<div class="empty-state">No activity logged yet</div>';
-  } else {
-    container.insertAdjacentHTML('beforeend', html);
-  }
+  container.innerHTML = data.items.map(auditRowHtml).join('') || '<div class="empty-state">No activity logged yet</div>';
   document.getElementById('auditCount').textContent = `${data.total} total`;
-  document.getElementById('auditLoadMoreRow').style.display = auditPage * PAGE_SIZE < data.total ? 'block' : 'none';
+  renderPaginationBar('audit', auditPage, data.total);
 }
 
-function loadMoreAuditLog() { auditPage++; loadAuditLog(false); }
+function changeAuditPage(delta) { auditPage += delta; loadAuditLog(false); }
 </script>
 </body>
 </html>

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app import i18n
 from app.auth import get_current_customer
+from app.config import settings
 from app.database import get_db
 from app.lang import get_lang
 from app.limiter import limiter
@@ -19,6 +20,17 @@ async def _save_attachment(attachment: UploadFile | None) -> str | None:
         return None
     data, ext = await read_validated_image(attachment)
     return save_image(data, ext, "tickets")
+
+
+def _admin_notify_text(header: str, body: str, attachment_path: str | None) -> str:
+    # The admin previously only got a one-line summary ("New ticket from X:
+    # <subject>") and had to open the site to read what was actually said —
+    # the full message body (and a link to any attachment) now goes straight
+    # into the Telegram notification.
+    text = f"{header}\n\n{body}"
+    if attachment_path:
+        text += f"\n\n📎 {settings.SITE_BASE_URL}{attachment_path}"
+    return text
 
 
 @router.post("/guest-tickets")
@@ -49,8 +61,14 @@ async def create_guest_ticket(
     db.add(msg)
     db.commit()
 
+    contact_line = f"\nContact: {contact}" if contact else ""
     await telegram.notify_admin(
-        f"📩 New message (guest, not logged in) from {ticket.guest_username}: {subject}"
+        _admin_notify_text(
+            f"📩 New message (guest, not logged in) from {ticket.guest_username}\n"
+            f"Subject: {subject}{contact_line}",
+            message,
+            attachment_path,
+        )
     )
     return {"ok": True}
 
@@ -74,7 +92,13 @@ async def create_ticket(
     db.commit()
     db.refresh(ticket)
 
-    await telegram.notify_admin(f"📩 New ticket from {customer.username}: {subject}")
+    await telegram.notify_admin(
+        _admin_notify_text(
+            f"📩 New ticket from {customer.username}\nSubject: {subject}",
+            message,
+            attachment_path,
+        )
+    )
     return ticket
 
 
@@ -154,5 +178,11 @@ async def reply_to_ticket(
     db.commit()
     db.refresh(ticket)
 
-    await telegram.notify_admin(f"📩 New message on ticket \"{ticket.subject}\" from {customer.username}")
+    await telegram.notify_admin(
+        _admin_notify_text(
+            f"📩 New message from {customer.username} on ticket \"{ticket.subject}\"",
+            message,
+            attachment_path,
+        )
+    )
     return ticket
