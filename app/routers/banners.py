@@ -31,9 +31,17 @@ def list_banners(db: Session = Depends(get_db)):
     )
 
 
-@admin_router.get("", response_model=list[BannerOut])
-def admin_list_banners(db: Session = Depends(get_db)):
-    return db.query(Banner).order_by(Banner.sort_order).all()
+@admin_router.get("")
+def admin_list_banners(db: Session = Depends(get_db), page: int = 1, page_size: int = 10):
+    query = db.query(Banner).order_by(Banner.sort_order)
+    total = query.count()
+    items = query.offset((page - 1) * page_size).limit(page_size).all()
+    return {
+        "items": [BannerOut.model_validate(b) for b in items],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 @admin_router.post("", response_model=BannerOut)

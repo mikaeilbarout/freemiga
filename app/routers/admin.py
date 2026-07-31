@@ -69,9 +69,17 @@ def admin_logout(request: Request):
     return {"ok": True}
 
 
-@router.get("/plans", response_model=list[PlanOut], dependencies=[Depends(require_admin)])
-def admin_list_plans(db: Session = Depends(get_db)):
-    return db.query(Plan).order_by(Plan.price_usdt).all()
+@router.get("/plans", dependencies=[Depends(require_admin)])
+def admin_list_plans(db: Session = Depends(get_db), page: int = 1, page_size: int = 10):
+    query = db.query(Plan).order_by(Plan.price_usdt)
+    total = query.count()
+    items = query.offset((page - 1) * page_size).limit(page_size).all()
+    return {
+        "items": [PlanOut.model_validate(p) for p in items],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 @router.post("/plans", response_model=PlanOut, dependencies=[Depends(require_admin)])

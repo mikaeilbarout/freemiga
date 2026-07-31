@@ -281,8 +281,11 @@ const ADMIN_PAGE_SIZE = 10;
 // picker without needing a full page reload.
 let grantPlansCache = [];
 async function getGrantPlansCache() {
-  const res = await fetch('/api/admin/plans');
-  grantPlansCache = res.ok ? await res.json() : [];
+  // The picker needs every plan, not one page of them — page_size here is
+  // just a generous ceiling, not real pagination (the Plans tab list itself
+  // is what's paginated).
+  const res = await fetch('/api/admin/plans?page_size=500');
+  grantPlansCache = res.ok ? (await res.json()).items : [];
   return grantPlansCache;
 }
 let customerPage = 1, customerSearchTimer = null;
@@ -588,10 +591,15 @@ const actionLabels = {
   update_plan: 'Updated plan', deactivate_plan: 'Deactivated plan',
 };
 
-async function loadPlans() {
-  const res = await fetch('/api/admin/plans');
+let plansPage = 1;
+
+async function loadPlans(reset = true) {
+  if (reset) plansPage = 1;
+  const params = new URLSearchParams({page: plansPage, page_size: ADMIN_PAGE_SIZE});
+  const res = await fetch(`/api/admin/plans?${params}`);
   if (!res.ok) return;
-  const plans = await res.json();
+  const data = await res.json();
+  const totalPages = Math.max(1, Math.ceil(data.total / ADMIN_PAGE_SIZE));
   document.getElementById('plans').innerHTML = `
     <div class="card row-card new-plan-card">
       <div class="name" style="margin-bottom:12px">Add new plan</div>
@@ -602,7 +610,10 @@ async function loadPlans() {
       <input id="newPlanDevices" placeholder="Max devices (optional — blank uses marzban-guard's default)" type="number">
       <button class="btn btn-primary btn-sm" onclick="createPlan()">Create plan</button>
     </div>
-  ` + plans.map(p => `
+    <div class="list-toolbar">
+      <span class="list-count">${data.total} total</span>
+    </div>
+  ` + (data.items.map(p => `
     <div class="card row-card">
       <div class="row-top">
         <div class="name">${escapeHtml(p.name)} ${!p.is_active ? '(inactive)' : ''}</div>
@@ -627,18 +638,33 @@ async function loadPlans() {
         <button class="btn btn-ghost btn-sm" onclick="toggleEditPlan('${p.id}')">Cancel</button>
       </div>
     </div>
-  `).join('');
+  `).join('') || '<div class="empty-state">No plans yet</div>') + `
+    <div class="load-more-row" style="display:${data.total > ADMIN_PAGE_SIZE ? 'block' : 'none'}">
+      <div style="display:flex;align-items:center;justify-content:center;gap:14px">
+        <button class="btn btn-ghost btn-sm" ${plansPage <= 1 ? 'disabled' : ''} onclick="changePlansPage(-1)">← Prev</button>
+        <span style="font-size:12.5px;color:var(--text-dim)">Page ${plansPage} of ${totalPages}</span>
+        <button class="btn btn-ghost btn-sm" ${plansPage >= totalPages ? 'disabled' : ''} onclick="changePlansPage(1)">Next →</button>
+      </div>
+    </div>
+  `;
 }
+
+function changePlansPage(delta) { plansPage += delta; loadPlans(false); }
 
 function toggleEditPlan(id) {
   const el = document.getElementById(`editPlan-${id}`);
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
-async function loadBanners() {
-  const res = await fetch('/api/admin/banners');
+let bannersPage = 1;
+
+async function loadBanners(reset = true) {
+  if (reset) bannersPage = 1;
+  const params = new URLSearchParams({page: bannersPage, page_size: ADMIN_PAGE_SIZE});
+  const res = await fetch(`/api/admin/banners?${params}`);
   if (!res.ok) return;
-  const banners = await res.json();
+  const data = await res.json();
+  const totalPages = Math.max(1, Math.ceil(data.total / ADMIN_PAGE_SIZE));
   document.getElementById('banners').innerHTML = `
     <div class="card row-card new-plan-card">
       <div class="name" style="margin-bottom:12px">Add new banner</div>
@@ -651,7 +677,10 @@ async function loadBanners() {
       <button class="btn btn-primary btn-sm" onclick="createBanner()">Add banner</button>
       <div class="field-err" id="bannerErr"></div>
     </div>
-  ` + banners.map(b => `
+    <div class="list-toolbar">
+      <span class="list-count">${data.total} total</span>
+    </div>
+  ` + (data.items.map(b => `
     <div class="card row-card">
       <div class="row-top">
         <div class="name">${b.headline ? escapeHtml(b.headline) : '<span class="faint">(no headline)</span>'}</div>
@@ -664,8 +693,18 @@ async function loadBanners() {
         <button class="btn btn-danger btn-sm" onclick="deleteBanner('${b.id}')">Delete</button>
       </div>
     </div>
-  `).join('') || '<div class="empty-state">No banners yet</div>';
+  `).join('') || '<div class="empty-state">No banners yet</div>') + `
+    <div class="load-more-row" style="display:${data.total > ADMIN_PAGE_SIZE ? 'block' : 'none'}">
+      <div style="display:flex;align-items:center;justify-content:center;gap:14px">
+        <button class="btn btn-ghost btn-sm" ${bannersPage <= 1 ? 'disabled' : ''} onclick="changeBannersPage(-1)">← Prev</button>
+        <span style="font-size:12.5px;color:var(--text-dim)">Page ${bannersPage} of ${totalPages}</span>
+        <button class="btn btn-ghost btn-sm" ${bannersPage >= totalPages ? 'disabled' : ''} onclick="changeBannersPage(1)">Next →</button>
+      </div>
+    </div>
+  `;
 }
+
+function changeBannersPage(delta) { bannersPage += delta; loadBanners(false); }
 
 async function createBanner() {
   const image = document.getElementById('newBannerImage').files[0];
