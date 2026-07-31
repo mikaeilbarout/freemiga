@@ -3,8 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ t('features_page_title') }} | {{ site_name }}</title>
+<title>{{ t('seo_features_title') }}</title>
 {% include "_fonts.html" %}
+{% set seo_title = t('seo_features_title') %}
+{% set seo_description = t('seo_features_description') %}
+{% set breadcrumb_label = t('nav_features') %}
+{% include "_seo_head.html" %}
 </head>
 <body>
 

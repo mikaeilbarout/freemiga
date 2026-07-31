@@ -1,0 +1,87 @@
+{# Included (with `{% include "_seo_head.html" %}`) by every indexable
+   marketing page, right after its own <title> tag. Expects, set via
+   `{% set %}` in the calling template before the include:
+     seo_title        (required — same text as <title>, minus site name)
+     seo_description  (required, <160 chars)
+     seo_image        (optional — absolute or root-relative OG image URL)
+     breadcrumb_label  (optional — omit on the home page)
+     plans_for_schema (optional — list of Plan ORM objects, /plans only)
+   lang_prefix/site_base_url/lang/dir/site_name all come from render(). #}
+{% set seo_image = seo_image if seo_image is defined else (site_base_url ~ "/static/img/og-default.png") %}
+{% set canonical_url = site_base_url ~ request.url.path %}
+{% set path_segments = request.url.path.split("/") %}
+{% set is_localized = path_segments|length > 1 and path_segments[1] in ["en", "fa"] %}
+{% set suffix = "/" ~ (path_segments[2:] | join("/")) if is_localized else "" %}
+
+<meta name="description" content="{{ seo_description }}">
+<link rel="canonical" href="{{ canonical_url }}">
+
+{% if is_localized %}
+<link rel="alternate" hreflang="en" href="{{ site_base_url }}/en{{ suffix }}">
+<link rel="alternate" hreflang="fa" href="{{ site_base_url }}/fa{{ suffix }}">
+<link rel="alternate" hreflang="x-default" href="{{ site_base_url }}/en{{ suffix }}">
+{% endif %}
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{ site_name }}">
+<meta property="og:title" content="{{ seo_title }}">
+<meta property="og:description" content="{{ seo_description }}">
+<meta property="og:url" content="{{ canonical_url }}">
+<meta property="og:image" content="{{ seo_image }}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="{{ 'fa_IR' if lang == 'fa' else 'en_US' }}">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ seo_title }}">
+<meta name="twitter:description" content="{{ seo_description }}">
+<meta name="twitter:image" content="{{ seo_image }}">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "{{ site_base_url }}/#organization",
+      "name": "{{ site_name }}",
+      "url": "{{ site_base_url }}/",
+      "logo": "{{ site_base_url }}/static/img/icon-512.png"
+    },
+    {
+      "@type": "WebSite",
+      "@id": "{{ site_base_url }}/#website",
+      "name": "{{ site_name }}",
+      "url": "{{ site_base_url }}/",
+      "publisher": { "@id": "{{ site_base_url }}/#organization" },
+      "inLanguage": "{{ lang }}"
+    }
+    {%- if breadcrumb_label is defined %}
+    ,{
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": {{ t('nav_home_breadcrumb')|tojson }}, "item": "{{ site_base_url }}{{ lang_prefix }}/" },
+        { "@type": "ListItem", "position": 2, "name": {{ breadcrumb_label|tojson }}, "item": "{{ canonical_url }}" }
+      ]
+    }
+    {%- endif %}
+    {%- if plans_for_schema is defined %}
+    {%- for plan in plans_for_schema %}
+    ,{
+      "@type": "Product",
+      "name": {{ plan.name|tojson }},
+      "brand": { "@type": "Brand", "name": "{{ site_name }}" },
+      "category": "VPN subscription",
+      "offers": {
+        "@type": "Offer",
+        "url": "{{ canonical_url }}",
+        "priceCurrency": "USD",
+        "price": "{{ '%.2f'|format(plan.price_usdt) }}",
+        "availability": "https://schema.org/InStock"
+      }
+    }
+    {%- endfor %}
+    {%- endif %}
+  ]
+}
+</script>

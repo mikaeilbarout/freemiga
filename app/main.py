@@ -2,9 +2,9 @@ import asyncio
 import logging
 import os
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.exception_handlers import http_exception_handler
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from slowapi.errors import RateLimitExceeded
@@ -183,6 +183,64 @@ def healthz():
     return {"status": "ok"}
 
 
+# path (relative to /{lang}), changefreq, priority — used to build sitemap.xml
+SITEMAP_PAGES = [
+    ("", "weekly", "1.0"),
+    ("plans", "weekly", "0.9"),
+    ("how-it-works", "monthly", "0.7"),
+    ("features", "monthly", "0.7"),
+    ("guide", "monthly", "0.6"),
+    ("terms", "yearly", "0.3"),
+]
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots_txt():
+    site = settings.SITE_BASE_URL.rstrip("/")
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /dashboard",
+        "Disallow: /billing",
+        "Disallow: /account",
+        "Disallow: /support",
+        "Disallow: /pay/",
+        "Disallow: /admin",
+        "Disallow: /api/",
+        "Disallow: /set-language",
+        "",
+        f"Sitemap: {site}/sitemap.xml",
+    ]
+    return "\n".join(lines)
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    site = settings.SITE_BASE_URL.rstrip("/")
+    entries = []
+    for path, changefreq, priority in SITEMAP_PAGES:
+        suffix = f"/{path}" if path else "/"
+        en_url = f"{site}/en{suffix}"
+        fa_url = f"{site}/fa{suffix}"
+        for loc in (en_url, fa_url):
+            entries.append(f"""  <url>
+    <loc>{loc}</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="{en_url}"/>
+    <xhtml:link rel="alternate" hreflang="fa" href="{fa_url}"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="{en_url}"/>
+    <changefreq>{changefreq}</changefreq>
+    <priority>{priority}</priority>
+  </url>""")
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+        'xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'
+        + "\n".join(entries) +
+        "\n</urlset>"
+    )
+    return Response(content=xml, media_type="application/xml")
+
+
 @app.get("/set-language")
 def set_language(request: Request, lang: str, next: str = "/"):
     lang = lang if lang in SUPPORTED_LANGUAGES else settings.DEFAULT_LANGUAGE
@@ -224,7 +282,16 @@ def index_localized(request: Request, lang: str):
 
 @app.get("/{lang}/plans", response_class=HTMLResponse)
 def plans_page_localized(request: Request, lang: str):
-    return _localized(request, lang, "plans_page.html")
+    db = SessionLocal()
+    try:
+        active_plans = db.query(Plan).filter(Plan.is_active == True).order_by(Plan.price_usdt).all()  # noqa: E712
+        # Detach from the session before it closes — the template only
+        # reads plain attributes (name, price_usdt), no lazy relationships.
+        for p in active_plans:
+            db.expunge(p)
+    finally:
+        db.close()
+    return _localized(request, lang, "plans_page.html", plans_for_schema=active_plans)
 
 
 @app.get("/{lang}/how-it-works", response_class=HTMLResponse)

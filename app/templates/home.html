@@ -3,8 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ site_name }} — {{ t('home_title') }}</title>
+<title>{{ t('seo_home_title') }}</title>
 {% include "_fonts.html" %}
+{% set seo_title = t('seo_home_title') %}
+{% set seo_description = t('seo_home_description') %}
+{% include "_seo_head.html" %}
 <style>
   .hero { padding: 96px 24px 32px; text-align: center; }
   .eyebrow {

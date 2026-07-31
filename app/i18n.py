@@ -21,6 +21,22 @@ TEXT = {
         "footer_rights": "All rights reserved.",
         "footer_terms": "Terms & conditions",
 
+        # SEO meta title/description — title under 60 chars, description
+        # under 160, for the marketing pages served under /en/...
+        "seo_home_title": "Freemiga — Fast, No-Log VPN for Iran & Worldwide",
+        "seo_home_description": "Freemiga is a fast, no-log VPN with 24/7 support. Bypass censorship, protect your privacy, and stream freely — plans start at $2.99/month.",
+        "seo_plans_title": "VPN Plans & Pricing — Freemiga",
+        "seo_plans_description": "Compare Freemiga VPN plans for solo, family, and team use. Pay by card or crypto. Plans start at $2.99/month, no long-term contract.",
+        "seo_how_title": "How Freemiga VPN Works — Setup in Minutes",
+        "seo_how_description": "See how Freemiga VPN works: sign up, choose a plan, and connect in minutes on any device. No technical knowledge required.",
+        "seo_features_title": "Why Choose Freemiga VPN — No-Log, Fast, Affordable",
+        "seo_features_description": "Discover why thousands trust Freemiga: a strict no-log policy, high-speed servers, 24/7 support, and simple pricing with no hidden fees.",
+        "seo_guide_title": "VPN Setup Guide — Connect on Any Device | Freemiga",
+        "seo_guide_description": "Step-by-step guide to setting up Freemiga VPN on Windows, Mac, iOS, Android, and more. Get connected in minutes.",
+        "seo_terms_title": "Terms & Acceptable Use Policy — Freemiga",
+        "seo_terms_description": "Read Freemiga's terms of service and acceptable use policy for our VPN service, including billing terms and prohibited activities.",
+        "nav_home_breadcrumb": "Home",
+
         # App sub-nav (logged-in area)
         "tab_overview": "Overview",
         "tab_billing": "Billing",
@@ -459,6 +475,20 @@ TEXT = {
         "lang_switch": "English",
         "footer_rights": "تمامی حقوق محفوظ است.",
         "footer_terms": "قوانین و مقررات",
+
+        "seo_home_title": "فریمیگا — وی‌پی‌ان پرسرعت و بدون لاگ برای ایران و جهان",
+        "seo_home_description": "فریمیگا یک VPN پرسرعت و بدون ثبت لاگ با پشتیبانی ۲۴ ساعته است. سانسور را دور بزن و از حریم خصوصی‌ات محافظت کن — شروع قیمت از ۲.۹۹ دلار در ماه.",
+        "seo_plans_title": "پلن‌ها و قیمت VPN — فریمیگا",
+        "seo_plans_description": "پلن‌های VPN فریمیگا را برای استفاده شخصی، خانوادگی و تیمی مقایسه کن. پرداخت با کارت یا کریپتو. شروع از ۲.۹۹ دلار در ماه، بدون قرارداد بلندمدت.",
+        "seo_how_title": "روش کار فریمیگا — اتصال در چند دقیقه",
+        "seo_how_description": "ببین فریمیگا چطور کار می‌کند: ثبت‌نام کن، پلن انتخاب کن و روی هر دستگاهی در چند دقیقه وصل شو. نیازی به دانش فنی نیست.",
+        "seo_features_title": "چرا فریمیگا — بدون لاگ، سریع، مقرون‌به‌صرفه",
+        "seo_features_description": "بفهم چرا هزاران نفر به فریمیگا اعتماد کرده‌اند: سیاست سخت‌گیرانه بدون لاگ، سرورهای پرسرعت، پشتیبانی ۲۴ ساعته و قیمت‌گذاری ساده بدون هزینه پنهان.",
+        "seo_guide_title": "راهنمای نصب VPN — اتصال روی هر دستگاهی | فریمیگا",
+        "seo_guide_description": "راهنمای گام‌به‌گام نصب فریمیگا روی ویندوز، مک، آیفون، اندروید و بیشتر. در چند دقیقه وصل شو.",
+        "seo_terms_title": "قوانین و سیاست استفاده صحیح — فریمیگا",
+        "seo_terms_description": "قوانین و سیاست استفاده صحیح فریمیگا برای سرویس VPN را بخوان، شامل شرایط پرداخت و فعالیت‌های ممنوع.",
+        "nav_home_breadcrumb": "خانه",
 
         "tab_overview": "نمای کلی",
         "tab_billing": "صورت‌حساب",
