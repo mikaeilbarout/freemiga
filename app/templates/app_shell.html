@@ -555,6 +555,8 @@ const DASH_I18N = {
   statusLimitedSub: {{ t('dashboard_status_limited_sub')|tojson }},
   statusDisabled: {{ t('dashboard_status_disabled', name='__NAME__')|tojson }},
   statusDisabledSub: {{ t('dashboard_status_disabled_sub')|tojson }},
+  statusSuspended: {{ t('dashboard_status_suspended', name='__NAME__')|tojson }},
+  statusSuspendedSub: {{ t('dashboard_status_suspended_sub')|tojson }},
   vpnLinkCopied: {{ t('dashboard_link_copied')|tojson }},
   copyLink: {{ t('pay_copy_link')|tojson }},
   renewPlan: {{ t('dashboard_renew_plan')|tojson }},
@@ -623,9 +625,10 @@ function copyStatusVpnLink() {
 }
 
 async function loadStatus() {
-  const [ordersRes, plansRes, vpnRes] = await Promise.all([
-    fetch('/api/orders'), fetch('/api/plans'), fetch('/api/orders/vpn-status/me'),
+  const [meRes, ordersRes, plansRes, vpnRes] = await Promise.all([
+    fetch('/api/auth/me'), fetch('/api/orders'), fetch('/api/plans'), fetch('/api/orders/vpn-status/me'),
   ]);
+  const me = meRes.ok ? await meRes.json() : { is_banned: false };
   const orders = await ordersRes.json();
   const plans = await plansRes.json();
   const vpn = vpnRes.ok ? await vpnRes.json() : { has_account: false, unreachable: true };
@@ -650,6 +653,25 @@ async function loadStatus() {
   const linkBtn = document.getElementById('statusVpnLinkBtn');
   linkBtn.style.display = 'none';
   statusVpnLink = null;
+
+  // A marzban-guard or admin suspension takes priority over everything
+  // below, no matter what Marzban's live status happens to say — the ban
+  // notice above already explains why, and this card must never
+  // contradict it by claiming "Active" (or worse, offering a "Copy VPN
+  // link" button) for a suspended account. This is exactly the
+  // inconsistency routers/integrations.py's docstring says the ban-sync
+  // webhook exists to prevent.
+  if (me.is_banned && active) {
+    const plan = planById[active.plan_id];
+    const planName = plan ? plan.name : DASH_I18N.statusActivePlan;
+    nameEl.textContent = DASH_I18N.statusSuspended.replace('__NAME__', planName);
+    subEl.textContent = DASH_I18N.statusSuspendedSub;
+    cta.textContent = DASH_I18N.renewPlan;
+    cta.href = '/billing';
+    cta.dataset.section = 'billing';
+    cta.onclick = (e) => { e.preventDefault(); activateSection('billing', {pushHistory: true}); };
+    return;
+  }
 
   // vpn.has_account reflects Marzban directly (live), not just "we've
   // provisioned an order before" — a renewal extends the *same* account
@@ -721,8 +743,9 @@ async function loadStatus() {
 }
 
 async function loadRecentOrders() {
-  const res = await fetch('/api/orders');
-  const orders = await res.json();
+  const [ordersRes, meRes] = await Promise.all([fetch('/api/orders'), fetch('/api/auth/me')]);
+  const orders = await ordersRes.json();
+  const banned = meRes.ok ? !!(await meRes.json()).is_banned : false;
   const container = document.getElementById('recentOrders');
   if (!orders.length) { container.innerHTML = `<div class="empty-state">${DASH_I18N.noOrders}</div>`; return; }
   container.innerHTML = orders.slice(0, 3).map(o => `
@@ -730,7 +753,7 @@ async function loadRecentOrders() {
       <div>
         ${o.is_renewal ? DASH_I18N.renewal : DASH_I18N.newPurchase} · $${o.amount_due} · ${o.payment_method === 'card' ? DASH_I18N.card : DASH_I18N.crypto}
         ${o.status === 'pending' ? `<a class="pay-link" href="/pay/${o.id}">${DASH_I18N.payNow}</a>` : ''}
-        ${o.status === 'provisioned' && o.subscription_url ? `<button class="btn btn-ghost btn-sm" style="margin-inline-start:8px" data-link="${o.subscription_url}" onclick="copyOrderLink(this)">${DASH_I18N.copyLink}</button>` : ''}
+        ${!banned && o.status === 'provisioned' && o.subscription_url ? `<button class="btn btn-ghost btn-sm" style="margin-inline-start:8px" data-link="${o.subscription_url}" onclick="copyOrderLink(this)">${DASH_I18N.copyLink}</button>` : ''}
       </div>
       ${statusBadgeDash(o.status)}
     </div>
@@ -776,12 +799,14 @@ function copyOrderLink(btn) {
 
 let selectedPlan = null;
 let hasAccount = false;
+let customerIsBanned = false;
 let plansById = {};
 let availableMethods = {card: false, crypto: false, crypto_networks: {}};
 async function loadMeBilling() {
   const res = await fetch('/api/auth/me');
   if (!res.ok) return;
   const me = await res.json();
+  customerIsBanned = !!me.is_banned;
 
   if (!me.email_verified) {
     document.getElementById('verifyNoticeBilling').style.display = 'flex';
@@ -910,7 +935,7 @@ async function loadAllOrders() {
       <div>
         ${o.is_renewal ? BILLING_I18N.renewal : BILLING_I18N.newPurchase} · ${o.amount_due === 0 ? BILLING_I18N.priceFree : (o.payment_method === 'crypto' ? o.amount_due + ' USDT' : '$' + o.amount_due)} · ${o.payment_method === 'card' ? BILLING_I18N.card : (o.payment_method === 'crypto' ? BILLING_I18N.crypto + (o.crypto_network === 'polygon' ? ' (Polygon)' : ' (Tron)') : BILLING_I18N.free)}
         ${o.status === 'pending' ? `<a class="pay-link" href="/pay/${o.id}">${BILLING_I18N.payNow}</a>` : ''}
-        ${o.status === 'provisioned' && o.subscription_url ? `<button class="btn btn-ghost btn-sm" style="margin-inline-start:8px" data-link="${o.subscription_url}" onclick="copyOrderLink(this)">${BILLING_I18N.copyLink}</button>` : ''}
+        ${!customerIsBanned && o.status === 'provisioned' && o.subscription_url ? `<button class="btn btn-ghost btn-sm" style="margin-inline-start:8px" data-link="${o.subscription_url}" onclick="copyOrderLink(this)">${BILLING_I18N.copyLink}</button>` : ''}
       </div>
       ${statusBadgeBilling(o.status)}
     </div>
