@@ -183,6 +183,74 @@ p {
   color: transparent;
 }
 
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.nav-hamburger:hover { border-color: var(--border-strong); background: rgba(255,255,255,0.03); }
+.nav-hamburger svg { width: 18px; height: 18px; }
+
+.nav-drawer-overlay {
+  position: fixed; inset: 0; background: rgba(5,6,10,0.72); backdrop-filter: blur(4px);
+  z-index: 990; opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+.nav-drawer-overlay.open { opacity: 1; pointer-events: auto; }
+
+.nav-drawer {
+  --drawer-closed-x: -105%;
+  position: fixed; top: 0; bottom: 0; inset-inline-start: 0; width: min(80vw, 300px);
+  background: rgba(8, 9, 14, 0.98); backdrop-filter: blur(20px);
+  border-inline-end: 1px solid var(--border);
+  z-index: 991; display: flex; flex-direction: column; padding: 18px;
+  transform: translateX(var(--drawer-closed-x));
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* A separate rule for .open would need to out-specificity this RTL rule
+   (extra type+attribute selectors give it higher specificity than a plain
+   two-class .nav-drawer.open would have) — setting only the custom property
+   here sidesteps that entirely, since .open still owns `transform` alone. */
+html[dir="rtl"] .nav-drawer { --drawer-closed-x: 105%; }
+.nav-drawer.open { transform: translateX(0); }
+
+.nav-drawer-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px;
+}
+
+.nav-drawer-close {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border);
+  background: transparent; color: var(--text-dim); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.nav-drawer-close:hover { border-color: var(--border-strong); color: var(--text); }
+.nav-drawer-close svg { width: 16px; height: 16px; }
+
+.nav-drawer-links {
+  display: flex; flex-direction: column; gap: 3px;
+}
+.nav-drawer-links a {
+  padding: 14px 12px; border-radius: var(--radius-sm);
+  font-size: 15px; font-weight: 600; color: var(--text);
+  transition: background 0.15s ease;
+}
+.nav-drawer-links a:hover { background: rgba(255,255,255,0.05); }
+
 .nav-links {
   display: flex;
   align-items: center;
@@ -445,6 +513,10 @@ input:focus, textarea:focus, select:focus {
 
 @media (max-width: 720px) {
   .nav-links { display: none; }
+  /* The links just hidden above (Plans, How it works, Features, Setup
+     guide) move into the off-canvas drawer instead — reachable via this
+     hamburger button rather than gone entirely. */
+  .nav-hamburger { display: inline-flex; }
   /* A username of any length plus the lang pill and auth controls
      don't fit on one line at narrow widths — rather than let them wrap
      into a lopsided stack, shrink the logo to its mark and collapse

@@ -1,9 +1,14 @@
 <nav class="nav">
   <div class="nav-inner">
-    <a class="brand" href="/">
-      <span class="brand-mark">F</span>
-      <span class="brand-name">{{ site_name }}</span>
-    </a>
+    <div class="nav-left">
+      <button class="nav-hamburger" id="navHamburgerBtn" aria-label="{{ t('nav_menu') }}" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <a class="brand" href="/">
+        <span class="brand-mark">F</span>
+        <span class="brand-name">{{ site_name }}</span>
+      </a>
+    </div>
     <div class="nav-links">
       <a href="/plans">{{ t('nav_plans') }}</a>
       <a href="/how-it-works">{{ t('nav_how_it_works') }}</a>
@@ -16,5 +21,25 @@
     </div>
   </div>
 </nav>
+
+<div class="nav-drawer-overlay" id="navDrawerOverlay"></div>
+<aside class="nav-drawer" id="navDrawer" aria-hidden="true">
+  <div class="nav-drawer-header">
+    <a class="brand" href="/">
+      <span class="brand-mark">F</span>
+      <span class="brand-name">{{ site_name }}</span>
+    </a>
+    <button class="nav-drawer-close" id="navDrawerCloseBtn" aria-label="{{ t('nav_menu_close') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="nav-drawer-links">
+    <a href="/plans">{{ t('nav_plans') }}</a>
+    <a href="/how-it-works">{{ t('nav_how_it_works') }}</a>
+    <a href="/features">{{ t('nav_features') }}</a>
+    <a href="/guide">{{ t('nav_guide') }}</a>
+  </div>
+</aside>
+
 <script>window.__NAV_I18N = { login: {{ t('nav_login')|tojson }}, signup: {{ t('nav_signup')|tojson }}, logout: {{ t('nav_logout')|tojson }} };</script>
 <script src="/static/js/nav.js"></script>

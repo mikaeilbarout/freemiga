@@ -35,3 +35,36 @@ async function navLogout() {
   await fetch('/api/auth/logout', {method: 'POST'});
   window.location.href = '/';
 }
+
+// Mobile nav drawer — the top-bar links (Plans, How it works, Features,
+// Setup guide) are hidden below 720px for space; the hamburger opens this
+// off-canvas panel to reach them instead.
+(function () {
+  const btn = document.getElementById('navHamburgerBtn');
+  const drawer = document.getElementById('navDrawer');
+  const overlay = document.getElementById('navDrawerOverlay');
+  const closeBtn = document.getElementById('navDrawerCloseBtn');
+  if (!btn || !drawer || !overlay) return;
+
+  function openDrawer() {
+    drawer.classList.add('open');
+    overlay.classList.add('open');
+    drawer.setAttribute('aria-hidden', 'false');
+    btn.setAttribute('aria-expanded', 'true');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeDrawer() {
+    drawer.classList.remove('open');
+    overlay.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+    btn.setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+  }
+
+  btn.addEventListener('click', openDrawer);
+  overlay.addEventListener('click', closeDrawer);
+  if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+  drawer.querySelectorAll('a').forEach(a => a.addEventListener('click', closeDrawer));
+})();
