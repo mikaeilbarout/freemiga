@@ -160,15 +160,19 @@ docker compose ps
 
 ### به‌روزرسانی بعد از تغییر کد
 ```bash
-git pull origin main
-docker compose build app
-docker compose up -d app
+./deploy.sh
 ```
-**اگه از سناریوی "nginx مشترک" بالا استفاده می‌کنی**، هر دو دستور بالا رو با
-`-f docker-compose.yml -f docker-compose.shared-nginx.yml` بزن، وگرنه
-`up -d app` کانتینر رو recreate می‌کنه و alias `freemiga_app` روی
-`web_shared` رو گم می‌کنه (سایت آفلاین می‌شه تا دستی با `docker network
-connect --alias freemiga_app web_shared <container>` دوباره وصلش کنی).
+این اسکریپت `git pull` می‌زنه و خودش تشخیص می‌ده سرور از سناریوی "nginx
+مشترک" استفاده می‌کنه یا نه (با چک‌کردن وجود شبکه‌ی `web_shared`)، و بر همون
+اساس فلگ‌های `-f` درست رو خودش می‌زنه — نیازی نیست دستی یادت بمونه. اگه
+دسترسی docker نیاز به sudo داره: `sudo ./deploy.sh`.
+
+**چرا این مهمه:** روی سناریوی "nginx مشترک"، اگه `docker compose up -d app`
+بدون `-f docker-compose.yml -f docker-compose.shared-nginx.yml` زده بشه،
+کانتینر recreate می‌شه و alias `freemiga_app` روی شبکه‌ی `web_shared` رو گم
+می‌کنه — سایت آفلاین می‌شه تا دستی با `docker network connect --alias
+freemiga_app web_shared <container>` دوباره وصلش کنی. `deploy.sh` دقیقاً
+برای جلوگیری از همین اشتباه ساخته شده.
 
 ### دیدن لاگ‌ها
 ```bash
