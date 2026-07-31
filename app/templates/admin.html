@@ -206,9 +206,11 @@ async function adminLogin() {
 }
 
 const ADMIN_PAGE_SIZE = 10;
-let grantPlansCache = null;
+// Not cached across calls — always fresh so a plan created after the
+// Customers tab was first opened still shows up in the "Grant plan"
+// picker without needing a full page reload.
+let grantPlansCache = [];
 async function getGrantPlansCache() {
-  if (grantPlansCache) return grantPlansCache;
   const res = await fetch('/api/admin/plans');
   grantPlansCache = res.ok ? await res.json() : [];
   return grantPlansCache;
@@ -688,7 +690,7 @@ function blogPostRowHtml(p) {
         <label>Content (Persian, HTML)</label>
         <textarea id="editBlogContentFa-${p.id}" rows="8" style="font-family:monospace;font-size:12px" dir="rtl">${escapeHtml(p.content_fa)}</textarea>
         <label>Author</label>
-        <input id="editBlogAuthor-${p.id}" value="" placeholder="${p.author ? '' : 'Freemiga Team'}">
+        <input id="editBlogAuthor-${p.id}" value="${escapeHtml(p.author || '')}" placeholder="Freemiga Team">
         <label>Category</label>
         <select id="editBlogCategory-${p.id}">${blogCategoryOptions(p.category ? p.category.id : null)}</select>
         <label style="margin-top:8px">Tags</label>
@@ -968,8 +970,8 @@ function auditRowHtml(l) {
   return `
     <div class="list-row">
       <div class="lr-main">
-        <div class="lr-title">${actionLabels[l.action] || l.action}</div>
-        <div class="lr-sub">Target: ${l.target}${l.detail ? ' — ' + l.detail : ''}</div>
+        <div class="lr-title">${escapeHtml(actionLabels[l.action] || l.action)}</div>
+        <div class="lr-sub">Target: ${escapeHtml(l.target)}${l.detail ? ' — ' + escapeHtml(l.detail) : ''}</div>
       </div>
       <div class="lr-right"><span class="faint" style="font-size:12px">${new Date(l.created_at).toLocaleString('en-US')}</span></div>
     </div>

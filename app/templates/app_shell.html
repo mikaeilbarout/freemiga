@@ -889,7 +889,7 @@ async function loadPlans() {
   container.innerHTML = plans.map(p => `
     <div class="plan-option" data-id="${p.id}">
       <div>
-        <div class="name">${p.name}</div>
+        <div class="name">${escapeHtml(p.name)}</div>
         <div class="meta">${BILLING_I18N.gbDays.replace('__GB__', p.data_limit_gb).replace('__DAYS__', p.duration_days)}</div>
       </div>
       <div class="price">${p.price_usdt === 0 ? BILLING_I18N.priceFree : '$' + p.price_usdt}</div>
