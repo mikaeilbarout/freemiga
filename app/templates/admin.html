@@ -14,9 +14,27 @@
 
   .admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
 
-  .tabs { display: flex; gap: 8px; margin-bottom: 22px; overflow-x: auto; padding-bottom: 2px; }
-  .tab { padding: 9px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
+  .stats-strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat-card {
+    flex: 1 1 140px; padding: 13px 16px; border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--panel); backdrop-filter: blur(20px); cursor: pointer; text-align: left;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+    font: inherit; color: inherit; -webkit-appearance: none; appearance: none;
+  }
+  .stat-card:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+  .stat-card .stat-num { font-size: 21px; font-weight: 700; font-family: var(--font-display); line-height: 1.1; }
+  .stat-card .stat-label { font-size: 11.5px; color: var(--text-dim); margin-top: 4px; }
+  .stat-card.attention { border-color: rgba(251,191,36,0.45); background: var(--warning-soft); }
+  .stat-card.attention .stat-num { color: var(--warning); }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 22px; overflow-x: auto; padding-bottom: 2px; position: sticky; top: 0; z-index: 5; background: var(--bg); padding-top: 4px; }
+  .tab { padding: 9px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; display: flex; align-items: center; }
   .tab.active { background: var(--gradient); color: #05060a; border-color: transparent; }
+  .tab-badge {
+    display: none; align-items: center; justify-content: center; min-width: 17px; height: 17px; padding: 0 4px;
+    border-radius: 999px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; margin-inline-start: 7px;
+  }
+  .tab.active .tab-badge { background: rgba(5,6,10,0.25); color: #05060a; }
 
   .row-card { padding: 15px 18px; margin-bottom: 10px; font-size: 13px; }
   .row-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 10px; }
@@ -78,10 +96,11 @@
     <div class="admin-header">
       <span class="brand"><span class="brand-mark">F</span><span class="brand-name">{{ site_name }}</span><span class="muted" style="font-size:13px;margin-left:6px">Admin</span></span>
     </div>
+    <div class="stats-strip" id="statsStrip"></div>
     <div class="tabs" role="tablist">
       <div class="tab active" data-tab="customers" role="tab" tabindex="0" aria-selected="true">Customers</div>
-      <div class="tab" data-tab="orders" role="tab" tabindex="0" aria-selected="false">Orders</div>
-      <div class="tab" data-tab="tickets" role="tab" tabindex="0" aria-selected="false">Support</div>
+      <div class="tab" data-tab="orders" role="tab" tabindex="0" aria-selected="false">Orders<span class="tab-badge" id="tabBadgeOrders"></span></div>
+      <div class="tab" data-tab="tickets" role="tab" tabindex="0" aria-selected="false">Support<span class="tab-badge" id="tabBadgeTickets"></span></div>
       <div class="tab" data-tab="plans" role="tab" tabindex="0" aria-selected="false">Plans</div>
       <div class="tab" data-tab="banners" role="tab" tabindex="0" aria-selected="false">Banners</div>
       <div class="tab" data-tab="blog" role="tab" tabindex="0" aria-selected="false">Blog</div>
@@ -178,14 +197,65 @@ document.addEventListener('keydown', e => {
   }
 });
 
-document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
-  document.querySelectorAll('.tab').forEach(x => { x.classList.remove('active'); x.setAttribute('aria-selected', 'false'); });
-  t.classList.add('active');
-  t.setAttribute('aria-selected', 'true');
-  ['customers','orders','tickets','plans','banners','blog','auditlog'].forEach(id => {
-    document.getElementById(id).style.display = id === t.dataset.tab ? 'block' : 'none';
+function activateTab(tabName) {
+  document.querySelectorAll('.tab').forEach(x => {
+    const active = x.dataset.tab === tabName;
+    x.classList.toggle('active', active);
+    x.setAttribute('aria-selected', String(active));
   });
-}));
+  ['customers','orders','tickets','plans','banners','blog','auditlog'].forEach(id => {
+    document.getElementById(id).style.display = id === tabName ? 'block' : 'none';
+  });
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => activateTab(t.dataset.tab)));
+
+function setBadge(id, count) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = count > 0 ? 'inline-flex' : 'none';
+  el.textContent = count > 99 ? '99+' : count;
+}
+
+async function loadStats() {
+  const res = await fetch('/api/admin/stats');
+  if (!res.ok) return;
+  const s = await res.json();
+  document.getElementById('statsStrip').innerHTML = `
+    <button type="button" class="stat-card" onclick="activateTab('customers')">
+      <div class="stat-num">${s.total_customers}</div>
+      <div class="stat-label">Customers</div>
+    </button>
+    <button type="button" class="stat-card ${s.banned_customers > 0 ? 'attention' : ''}" onclick="activateTab('customers')">
+      <div class="stat-num">${s.banned_customers}</div>
+      <div class="stat-label">Suspended</div>
+    </button>
+    <button type="button" class="stat-card ${s.orders_needing_confirm > 0 ? 'attention' : ''}" onclick="goToOrdersNeedingConfirm()">
+      <div class="stat-num">${s.orders_needing_confirm}</div>
+      <div class="stat-label">Payments to verify</div>
+    </button>
+    <button type="button" class="stat-card ${s.tickets_needing_reply > 0 ? 'attention' : ''}" onclick="goToTicketsNeedingReply()">
+      <div class="stat-num">${s.tickets_needing_reply}</div>
+      <div class="stat-label">Tickets awaiting reply</div>
+    </button>
+    <button type="button" class="stat-card" onclick="activateTab('tickets')">
+      <div class="stat-num">${s.open_tickets}</div>
+      <div class="stat-label">Open tickets</div>
+    </button>
+  `;
+  setBadge('tabBadgeOrders', s.orders_needing_confirm);
+  setBadge('tabBadgeTickets', s.tickets_needing_reply);
+}
+
+function goToOrdersNeedingConfirm() {
+  activateTab('orders');
+  loadOrders(true);
+}
+
+function goToTicketsNeedingReply() {
+  activateTab('tickets');
+  document.getElementById('ticketOpenOnly').checked = true;
+  loadTickets(true);
+}
 
 async function adminLogin() {
   const res = await fetch('/api/admin/login', {
@@ -202,7 +272,7 @@ async function adminLogin() {
   }
   document.getElementById('loginCard').style.display = 'none';
   document.getElementById('panel').style.display = 'block';
-  loadCustomers(); loadOrders(); loadTickets(); loadAuditLog(); loadPlans(); loadBanners(); loadBlog();
+  loadCustomers(); loadOrders(); loadTickets(); loadAuditLog(); loadPlans(); loadBanners(); loadBlog(); loadStats();
 }
 
 const ADMIN_PAGE_SIZE = 10;
@@ -297,6 +367,7 @@ async function submitGrantPlan(customerId) {
     showToast('Order created but provisioning failed — check the activity log and Marzban directly.', 'error');
   }
   loadCustomers(false);
+  loadStats();
 }
 
 async function loadCustomers(reset = true) {
@@ -327,11 +398,13 @@ async function banPrompt(id) {
     body: JSON.stringify({reason})
   });
   loadCustomers(true);
+  loadStats();
 }
 
 async function unban(id) {
   await fetch(`/api/admin/customers/${id}/unban`, {method: 'POST'});
   loadCustomers(true);
+  loadStats();
 }
 
 function statusLabel(s) {
@@ -386,6 +459,7 @@ async function confirmOrder(id) {
   const res = await fetch(`/api/admin/orders/${id}/confirm`, {method: 'POST'});
   if (!res.ok) { showToast('This order could not be confirmed — please try again.', 'error'); return; }
   loadOrders(true);
+  loadStats();
 }
 
 // Safe for text-node AND quoted-attribute-value context (unlike a bare
@@ -498,11 +572,13 @@ async function replyTicket(id) {
     return;
   }
   loadTickets(true);
+  loadStats();
 }
 
 async function closeTicket(id) {
   await fetch(`/api/admin/tickets/${id}/close`, {method: 'POST'});
   loadTickets(true);
+  loadStats();
 }
 
 const actionLabels = {

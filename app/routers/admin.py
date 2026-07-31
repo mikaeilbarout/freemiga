@@ -132,6 +132,49 @@ def delete_plan(plan_id: str, db: Session = Depends(get_db)):
     return {"ok": True, "deleted": False}
 
 
+@router.get("/stats", dependencies=[Depends(require_admin)])
+def admin_stats(db: Session = Depends(get_db)):
+    """Powers the at-a-glance summary strip and tab badges at the top of
+    the admin panel — lets an admin see what needs attention without
+    clicking through every tab."""
+    total_customers = db.query(Customer).filter(Customer.is_deleted.is_(False)).count()
+    banned_customers = db.query(Customer).filter(
+        Customer.is_deleted.is_(False), Customer.is_banned.is_(True)
+    ).count()
+
+    # Same condition the Orders tab's "Confirm manually" button checks —
+    # a crypto order stuck pending/failed usually means the on-chain
+    # payment needs the admin to verify and confirm it by hand.
+    orders_needing_confirm = (
+        db.query(Order)
+        .filter(
+            Order.payment_method == PaymentMethod.crypto,
+            Order.status.in_([OrderStatus.pending, OrderStatus.failed]),
+        )
+        .count()
+    )
+
+    # needs_reply isn't a DB column (mirrors the same last-message check
+    # list_tickets does) — cheap enough at this scale to compute in Python.
+    open_tickets = (
+        db.query(SupportTicket)
+        .options(selectinload(SupportTicket.messages))
+        .filter(SupportTicket.status == TicketStatus.open)
+        .all()
+    )
+    tickets_needing_reply = sum(
+        1 for t in open_tickets if t.messages and t.messages[-1].sender == "customer"
+    )
+
+    return {
+        "total_customers": total_customers,
+        "banned_customers": banned_customers,
+        "orders_needing_confirm": orders_needing_confirm,
+        "open_tickets": len(open_tickets),
+        "tickets_needing_reply": tickets_needing_reply,
+    }
+
+
 @router.get("/customers", dependencies=[Depends(require_admin)])
 def list_customers(
     db: Session = Depends(get_db),
