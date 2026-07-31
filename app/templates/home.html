@@ -74,9 +74,9 @@
   <p class="lead fade-up" style="animation-delay:.08s">{{ t('hero_lead') }}</p>
   <div class="hero-actions fade-up" style="animation-delay:.16s">
     <a class="btn btn-primary" href="/signup">{{ t('hero_cta_primary') }}</a>
-    <a class="btn btn-ghost" href="/plans">{{ t('hero_cta_secondary') }}</a>
+    <a class="btn btn-ghost" href="{{ lang_prefix }}/plans">{{ t('hero_cta_secondary') }}</a>
   </div>
-  <a class="hero-perk fade-up" style="animation-delay:.2s" href="/plans">
+  <a class="hero-perk fade-up" style="animation-delay:.2s" href="{{ lang_prefix }}/plans">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M20 12v9H4v-9M2 7h20v5H2V7Zm10 0V4a2.5 2.5 0 0 0-5 0v3h5Zm0 0V4a2.5 2.5 0 0 1 5 0v3h-5Z"/></svg>
     {{ t('hero_perk') }}
   </a>
@@ -101,17 +101,17 @@
     <h2>{{ t('explore_h2') }}</h2>
   </div>
   <div class="explore-grid">
-    <a class="card explore-card" href="/plans">
+    <a class="card explore-card" href="{{ lang_prefix }}/plans">
       <h3>{{ t('explore_plans_title') }}</h3>
       <p>{{ t('explore_plans_desc') }}</p>
       <span class="link-arrow">{{ t('explore_plans_link') }}</span>
     </a>
-    <a class="card explore-card" href="/how-it-works">
+    <a class="card explore-card" href="{{ lang_prefix }}/how-it-works">
       <h3>{{ t('explore_how_title') }}</h3>
       <p>{{ t('explore_how_desc') }}</p>
       <span class="link-arrow">{{ t('explore_how_link') }}</span>
     </a>
-    <a class="card explore-card" href="/features">
+    <a class="card explore-card" href="{{ lang_prefix }}/features">
       <h3>{{ t('explore_why_title') }}</h3>
       <p>{{ t('explore_why_desc') }}</p>
       <span class="link-arrow">{{ t('explore_why_link') }}</span>
@@ -126,7 +126,7 @@
       <h2>{{ t('promo_h2') }}</h2>
       <p>{{ t('promo_p') }}</p>
     </div>
-    <a class="btn btn-primary" href="/plans">{{ t('promo_cta') }}</a>
+    <a class="btn btn-primary" href="{{ lang_prefix }}/plans">{{ t('promo_cta') }}</a>
   </div>
 </section>
 

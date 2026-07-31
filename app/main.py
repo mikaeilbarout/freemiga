@@ -90,6 +90,23 @@ except OSError:
 def render(request: Request, template_name: str, *, force_lang: str = None, status_code: int = 200, **extra_context):
     had_cookie = request.cookies.get(LANG_COOKIE) in SUPPORTED_LANGUAGES
     lang = force_lang or resolve_lang(request)
+    other_lang = "fa" if lang == "en" else "en"
+
+    # localized_page=True on the /{lang}/... routes (see index_localized
+    # etc. below) — the language switch there is a straight link to the
+    # same path under the other language prefix, not a cookie flip, so
+    # Google (which doesn't carry cookies) can actually discover and index
+    # both language versions of every marketing page independently.
+    is_localized_page = extra_context.pop("localized_page", False)
+    path = request.url.path
+    segments = path.split("/")
+    if is_localized_page and len(segments) > 1 and segments[1] in SUPPORTED_LANGUAGES:
+        alt_segments = list(segments)
+        alt_segments[1] = other_lang
+        lang_switch_url = "/".join(alt_segments) or "/"
+    else:
+        lang_switch_url = f"/set-language?lang={other_lang}&next={path}"
+
     context = {
         "request": request,
         "site_name": settings.SITE_NAME,
@@ -97,10 +114,22 @@ def render(request: Request, template_name: str, *, force_lang: str = None, stat
         "dir": "rtl" if lang == "fa" else "ltr",
         "t": lambda key, **kw: i18n.t(lang, key, **kw),
         "asset_version": ASSET_VERSION,
+        # Every template can link to a marketing page in the visitor's
+        # current language via {{ lang_prefix }}/plans etc., whether the
+        # current page itself is a localized one or not (e.g. /pay/{id}
+        # linking to /guide).
+        "lang_prefix": f"/{lang}",
+        "lang_switch_url": lang_switch_url,
+        "site_base_url": settings.SITE_BASE_URL,
         **extra_context,
     }
     response = templates.TemplateResponse(template_name, context, status_code=status_code)
-    if not force_lang and not had_cookie:
+    if is_localized_page:
+        # Explicitly visiting /en/... or /fa/... (typed, bookmarked, or
+        # clicked from a Google result) is a stronger signal than the
+        # original auto-detect-once cookie, so it always wins.
+        response.set_cookie(LANG_COOKIE, lang, max_age=60 * 60 * 24 * 365, samesite="lax")
+    elif not force_lang and not had_cookie:
         response.set_cookie(LANG_COOKIE, lang, max_age=60 * 60 * 24 * 365, samesite="lax")
     return response
 
@@ -163,24 +192,83 @@ def set_language(request: Request, lang: str, next: str = "/"):
     return response
 
 
+SITE_URL = settings.SITE_BASE_URL.rstrip("/")
+
+
+def _localized(request: Request, lang: str, template_name: str, **extra_context):
+    if lang not in SUPPORTED_LANGUAGES:
+        raise StarletteHTTPException(404)
+    return render(request, template_name, force_lang=lang, localized_page=True, **extra_context)
+
+
+def _redirect_to_localized(request: Request, path: str, status_code: int) -> RedirectResponse:
+    # Preserve the query string (UTM/campaign params, etc.) — a bare
+    # redirect target would silently drop anything after "?".
+    target = f"/{resolve_lang(request)}{path}"
+    if request.url.query:
+        target += f"?{request.url.query}"
+    return RedirectResponse(url=target, status_code=status_code)
+
+
+# ---- Marketing pages — localized under /en/... and /fa/... so Google can
+# crawl and index each language independently (it never carries the cookie
+# the old single-URL, cookie-switched pages relied on). The old bare paths
+# below 301-redirect to whichever language the visitor would have gotten
+# before, preserving any existing bookmarks/backlinks/search rankings
+# instead of just breaking them.
+
+@app.get("/{lang}/", response_class=HTMLResponse)
+def index_localized(request: Request, lang: str):
+    return _localized(request, lang, "home.html")
+
+
+@app.get("/{lang}/plans", response_class=HTMLResponse)
+def plans_page_localized(request: Request, lang: str):
+    return _localized(request, lang, "plans_page.html")
+
+
+@app.get("/{lang}/how-it-works", response_class=HTMLResponse)
+def how_it_works_page_localized(request: Request, lang: str):
+    return _localized(request, lang, "how_it_works.html")
+
+
+@app.get("/{lang}/features", response_class=HTMLResponse)
+def features_page_localized(request: Request, lang: str):
+    return _localized(request, lang, "features.html")
+
+
+@app.get("/{lang}/guide", response_class=HTMLResponse)
+def guide_page_localized(request: Request, lang: str):
+    return _localized(request, lang, "guide.html")
+
+
+@app.get("/{lang}/terms", response_class=HTMLResponse)
+def terms_page_localized(request: Request, lang: str):
+    return _localized(request, lang, "terms.html", updated_at="July 30, 2026")
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    return render(request, "home.html")
+    # Root is the one URL where visitor-preferred-language detection still
+    # makes sense — a 302 (not 301) since the "right" target differs per
+    # visitor/cookie and must never be treated as a permanent alias for one
+    # specific language.
+    return _redirect_to_localized(request, "/", 302)
 
 
 @app.get("/plans", response_class=HTMLResponse)
 def plans_page(request: Request):
-    return render(request, "plans_page.html")
+    return _redirect_to_localized(request, "/plans", 301)
 
 
 @app.get("/how-it-works", response_class=HTMLResponse)
 def how_it_works_page(request: Request):
-    return render(request, "how_it_works.html")
+    return _redirect_to_localized(request, "/how-it-works", 301)
 
 
 @app.get("/features", response_class=HTMLResponse)
 def features_page(request: Request):
-    return render(request, "features.html")
+    return _redirect_to_localized(request, "/features", 301)
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -228,12 +316,12 @@ def pay_page(request: Request, order_id: str):
 
 @app.get("/terms", response_class=HTMLResponse)
 def terms_page(request: Request):
-    return render(request, "terms.html", updated_at="July 30, 2026")
+    return _redirect_to_localized(request, "/terms", 301)
 
 
 @app.get("/guide", response_class=HTMLResponse)
 def guide_page(request: Request):
-    return render(request, "guide.html")
+    return _redirect_to_localized(request, "/guide", 301)
 
 
 @app.get("/admin", response_class=HTMLResponse)

@@ -4,19 +4,19 @@
       <button class="nav-hamburger" id="navHamburgerBtn" aria-label="{{ t('nav_menu') }}" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
       </button>
-      <a class="brand" href="/">
+      <a class="brand" href="{{ lang_prefix }}/">
         <span class="brand-mark">F</span>
         <span class="brand-name">{{ site_name }}</span>
       </a>
     </div>
     <div class="nav-links">
-      <a href="/plans">{{ t('nav_plans') }}</a>
-      <a href="/how-it-works">{{ t('nav_how_it_works') }}</a>
-      <a href="/features">{{ t('nav_features') }}</a>
-      <a href="/guide">{{ t('nav_guide') }}</a>
+      <a href="{{ lang_prefix }}/plans">{{ t('nav_plans') }}</a>
+      <a href="{{ lang_prefix }}/how-it-works">{{ t('nav_how_it_works') }}</a>
+      <a href="{{ lang_prefix }}/features">{{ t('nav_features') }}</a>
+      <a href="{{ lang_prefix }}/guide">{{ t('nav_guide') }}</a>
     </div>
     <div class="nav-actions">
-      <a class="lang-switch" href="/set-language?lang={{ 'fa' if lang == 'en' else 'en' }}&next={{ request.url.path }}">{{ t('lang_switch') }}</a>
+      <a class="lang-switch" href="{{ lang_switch_url }}">{{ t('lang_switch') }}</a>
       <div id="navAuthSlot"></div>
     </div>
   </div>
@@ -25,7 +25,7 @@
 <div class="nav-drawer-overlay" id="navDrawerOverlay"></div>
 <aside class="nav-drawer" id="navDrawer" aria-hidden="true">
   <div class="nav-drawer-header">
-    <a class="brand" href="/">
+    <a class="brand" href="{{ lang_prefix }}/">
       <span class="brand-mark">F</span>
       <span class="brand-name">{{ site_name }}</span>
     </a>
@@ -34,10 +34,10 @@
     </button>
   </div>
   <div class="nav-drawer-links">
-    <a href="/plans">{{ t('nav_plans') }}</a>
-    <a href="/how-it-works">{{ t('nav_how_it_works') }}</a>
-    <a href="/features">{{ t('nav_features') }}</a>
-    <a href="/guide">{{ t('nav_guide') }}</a>
+    <a href="{{ lang_prefix }}/plans">{{ t('nav_plans') }}</a>
+    <a href="{{ lang_prefix }}/how-it-works">{{ t('nav_how_it_works') }}</a>
+    <a href="{{ lang_prefix }}/features">{{ t('nav_features') }}</a>
+    <a href="{{ lang_prefix }}/guide">{{ t('nav_guide') }}</a>
   </div>
 </aside>
 
