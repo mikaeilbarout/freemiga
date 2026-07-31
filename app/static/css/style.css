@@ -476,6 +476,7 @@ input:focus, textarea:focus, select:focus {
 .row-between { display: flex; align-items: center; justify-content: space-between; }
 .gap-8 { gap: 8px; }
 .gap-12 { gap: 12px; }
+.footer-inner .row { flex-wrap: wrap; row-gap: 8px; }
 
 .divider {
   height: 1px;

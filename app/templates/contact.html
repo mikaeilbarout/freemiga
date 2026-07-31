@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ t('seo_contact_title') }}</title>
+{% include "_fonts.html" %}
+{% set seo_title = t('seo_contact_title') %}
+{% set seo_description = t('seo_contact_description') %}
+{% set breadcrumb_label = t('footer_contact') %}
+{% include "_seo_head.html" %}
+<style>
+  .contact-wrap { max-width: 480px; margin: 0 auto; padding: 40px 16px 100px; }
+  .contact-dashboard-note {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 14px 18px; margin-bottom: 24px; font-size: 13px; color: var(--text-dim);
+  }
+  .success-text { color: var(--success); font-size: 12.5px; margin-top: 10px; }
+  .contact-form-card { padding: 34px; }
+</style>
+</head>
+<body>
+
+{% include "_nav.html" %}
+
+<main>
+
+<header class="page-hero">
+  <h1 class="fade-up">{{ t('contact_hero_h1') }}</h1>
+  <p class="lead fade-up" style="animation-delay:.08s">{{ t('contact_hero_p') }}</p>
+</header>
+
+<section class="section">
+  <div class="contact-wrap">
+    <div class="card contact-dashboard-note">
+      <span>{{ t('contact_dashboard_note') }}</span>
+      <a class="btn btn-ghost btn-sm" href="/login">{{ t('contact_dashboard_link') }}</a>
+    </div>
+
+    <div class="card contact-form-card">
+      <label for="cUsername">{{ t('login_username') }}</label>
+      <input id="cUsername" placeholder="Guest" autocomplete="username">
+      <label for="cContact">{{ t('gt_contact') }}</label>
+      <input id="cContact" placeholder="@yourhandle">
+      <label for="cSubject">{{ t('gt_subject') }}</label>
+      <input id="cSubject" value="{{ t('contact_subject_default') }}">
+      <label for="cMessage">{{ t('gt_message') }}</label>
+      <textarea id="cMessage" rows="5" placeholder="{{ t('gt_message_placeholder') }}"></textarea>
+      <button type="button" class="btn btn-primary btn-block" onclick="sendContactMessage()">{{ t('gt_send') }}</button>
+      <div class="success-text" id="cStatus" style="display:none"></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+{% include "_footer.html" %}
+
+<script>
+const CONTACT_I18N = {
+  success: {{ t('gt_success')|tojson }},
+  error: {{ t('gt_error')|tojson }},
+};
+
+async function sendContactMessage() {
+  const username = document.getElementById('cUsername').value.trim() || 'Guest';
+  const message = document.getElementById('cMessage').value.trim();
+  const box = document.getElementById('cStatus');
+  if (!message) return;
+  const form = new FormData();
+  form.set('username', username);
+  const contact = document.getElementById('cContact').value.trim();
+  if (contact) form.set('contact', contact);
+  form.set('subject', document.getElementById('cSubject').value.trim());
+  form.set('message', message);
+  const res = await fetch('/api/support/guest-tickets', { method: 'POST', body: form });
+  box.style.display = 'block';
+  box.textContent = res.ok ? CONTACT_I18N.success : CONTACT_I18N.error;
+  if (res.ok) document.getElementById('cMessage').value = '';
+}
+</script>
+</body>
+</html>

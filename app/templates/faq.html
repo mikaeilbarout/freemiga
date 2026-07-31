@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ t('seo_faq_title') }}</title>
+{% include "_fonts.html" %}
+{% set seo_title = t('seo_faq_title') %}
+{% set seo_description = t('seo_faq_description') %}
+{% set breadcrumb_label = t('nav_faq') %}
+{% set faqs = [
+  {"q": t('faq_1_q'), "a": t('faq_1_a')},
+  {"q": t('faq_2_q'), "a": t('faq_2_a')},
+  {"q": t('faq_3_q'), "a": t('faq_3_a')},
+  {"q": t('faq_4_q'), "a": t('faq_4_a')},
+  {"q": t('faq_5_q'), "a": t('faq_5_a')},
+  {"q": t('faq_6_q'), "a": t('faq_6_a')},
+  {"q": t('faq_7_q'), "a": t('faq_7_a')},
+  {"q": t('faq_8_q'), "a": t('faq_8_a')},
+  {"q": t('faq_9_q'), "a": t('faq_9_a')},
+  {"q": t('faq_10_q'), "a": t('faq_10_a')},
+] %}
+{% include "_seo_head.html" %}
+<style>
+  .accordion-block { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; background: rgba(255,255,255,0.02); }
+  .accordion-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding: 18px 20px; cursor: pointer;
+  }
+  .accordion-header:hover { background: rgba(255,255,255,0.03); }
+  .accordion-title { font-size: 14.5px; font-weight: 600; }
+  .accordion-chevron { width: 16px; height: 16px; flex: 0 0 16px; color: var(--text-dim); transition: transform 0.2s ease; }
+  .accordion-block.open .accordion-chevron { transform: rotate(180deg); }
+  .accordion-body { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+  .accordion-block.open .accordion-body { max-height: 1000px; }
+  .accordion-body-inner { padding: 0 20px 20px; color: var(--text-dim); font-size: 13.5px; line-height: 1.8; }
+  .faq-wrap { max-width: 720px; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+{% include "_nav.html" %}
+
+<main>
+
+<header class="page-hero">
+  <h1 class="fade-up">{{ t('faq_hero_h1') }}</h1>
+  <p class="lead fade-up" style="animation-delay:.08s">{{ t('faq_hero_p') }}</p>
+</header>
+
+<section class="section">
+  <div class="faq-wrap">
+    {% for item in faqs %}
+    <div class="accordion-block">
+      <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)">
+        <div class="accordion-title">{{ item.q }}</div>
+        <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-body-inner">{{ item.a }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="section">
+  <div class="card cta-band">
+    <div>
+      <h2>{{ t('cta_band_h2') }}</h2>
+      <p>{{ t('cta_band_p') }}</p>
+    </div>
+    <a class="btn btn-primary" href="/signup">{{ t('cta_band_btn') }}</a>
+  </div>
+</section>
+
+</main>
+
+{% include "_footer.html" %}
+
+<script>
+function toggleAccordion(header) {
+  const block = header.closest('.accordion-block');
+  block.classList.toggle('open');
+  header.setAttribute('aria-expanded', block.classList.contains('open'));
+  const body = block.querySelector('.accordion-body');
+  body.style.maxHeight = block.classList.contains('open') ? body.scrollHeight + 'px' : '';
+}
+</script>
+</body>
+</html>

@@ -10,6 +10,7 @@
      plans_for_schema (optional — list of Plan ORM objects, /plans only)
      article (optional — dict with title/description/image/author/
        published_iso/modified_iso, blog post detail pages only)
+     faqs (optional — list of {"q":..., "a":...} dicts, the FAQ page only)
    lang_prefix/site_base_url/lang/dir/site_name all come from render(). #}
 {% set seo_image = seo_image if seo_image is defined else (site_base_url ~ "/static/img/og-default.png") %}
 {% set canonical_url = site_base_url ~ request.url.path %}
@@ -85,6 +86,20 @@
       "datePublished": "{{ article.published_iso }}",
       "dateModified": "{{ article.modified_iso }}",
       "mainEntityOfPage": { "@type": "WebPage", "@id": "{{ canonical_url }}" }
+    }
+    {%- endif %}
+    {%- if faqs is defined %}
+    ,{
+      "@type": "FAQPage",
+      "mainEntity": [
+        {%- for item in faqs %}
+        {
+          "@type": "Question",
+          "name": {{ item.q|tojson }},
+          "acceptedAnswer": { "@type": "Answer", "text": {{ item.a|tojson }} }
+        }{{ "," if not loop.last }}
+        {%- endfor %}
+      ]
     }
     {%- endif %}
     {%- if plans_for_schema is defined %}

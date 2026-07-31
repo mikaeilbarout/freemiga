@@ -269,6 +269,12 @@ SITEMAP_PAGES = [
     ("guide", "monthly", "0.6"),
     ("terms", "yearly", "0.3"),
     ("blog", "weekly", "0.7"),
+    ("faq", "monthly", "0.6"),
+    ("about", "yearly", "0.4"),
+    ("contact", "yearly", "0.4"),
+    ("privacy", "yearly", "0.3"),
+    ("refund-policy", "yearly", "0.3"),
+    ("cookies", "yearly", "0.3"),
 ]
 
 
@@ -411,6 +417,36 @@ def guide_page_localized(request: Request, lang: str):
 @app.get("/{lang}/terms", response_class=HTMLResponse)
 def terms_page_localized(request: Request, lang: str):
     return _localized(request, lang, "terms.html", updated_at="July 30, 2026")
+
+
+@app.get("/{lang}/faq", response_class=HTMLResponse)
+def faq_page_localized(request: Request, lang: str):
+    return _localized(request, lang, "faq.html")
+
+
+@app.get("/{lang}/about", response_class=HTMLResponse)
+def about_page_localized(request: Request, lang: str):
+    return _localized(request, lang, "about.html")
+
+
+@app.get("/{lang}/contact", response_class=HTMLResponse)
+def contact_page_localized(request: Request, lang: str):
+    return _localized(request, lang, "contact.html")
+
+
+@app.get("/{lang}/privacy", response_class=HTMLResponse)
+def privacy_page_localized(request: Request, lang: str):
+    return _localized(request, lang, "privacy.html")
+
+
+@app.get("/{lang}/refund-policy", response_class=HTMLResponse)
+def refund_policy_page_localized(request: Request, lang: str):
+    return _localized(request, lang, "refund_policy.html")
+
+
+@app.get("/{lang}/cookies", response_class=HTMLResponse)
+def cookies_page_localized(request: Request, lang: str):
+    return _localized(request, lang, "cookies.html")
 
 
 BLOG_PAGE_SIZE = 9
@@ -566,6 +602,36 @@ def guide_page(request: Request):
 @app.get("/blog", response_class=HTMLResponse)
 def blog_page(request: Request):
     return _redirect_to_localized(request, "/blog", 301)
+
+
+@app.get("/faq", response_class=HTMLResponse)
+def faq_page(request: Request):
+    return _redirect_to_localized(request, "/faq", 301)
+
+
+@app.get("/about", response_class=HTMLResponse)
+def about_page(request: Request):
+    return _redirect_to_localized(request, "/about", 301)
+
+
+@app.get("/contact", response_class=HTMLResponse)
+def contact_page(request: Request):
+    return _redirect_to_localized(request, "/contact", 301)
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy_page(request: Request):
+    return _redirect_to_localized(request, "/privacy", 301)
+
+
+@app.get("/refund-policy", response_class=HTMLResponse)
+def refund_policy_page(request: Request):
+    return _redirect_to_localized(request, "/refund-policy", 301)
+
+
+@app.get("/cookies", response_class=HTMLResponse)
+def cookies_page(request: Request):
+    return _redirect_to_localized(request, "/cookies", 301)
 
 
 @app.get("/blog/{slug}", response_class=HTMLResponse)

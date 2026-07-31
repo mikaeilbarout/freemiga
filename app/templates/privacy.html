@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ t('seo_privacy_title') }}</title>
+{% include "_fonts.html" %}
+{% set seo_title = t('seo_privacy_title') %}
+{% set seo_description = t('seo_privacy_description') %}
+{% set breadcrumb_label = t('footer_privacy') %}
+{% include "_seo_head.html" %}
+<style>
+  .page-wrap { padding: 40px 16px 100px; }
+  h1.title { font-family: var(--font-display); font-size: 30px; margin-bottom: 26px; }
+  .doc-item { margin-bottom: 28px; }
+  .doc-item:last-child { margin-bottom: 0; }
+  .doc-item h2 {
+    font-family: var(--font-display); font-size: 15px; margin: 0 0 8px;
+    color: var(--accent-2); padding-inline-start: 12px; border-inline-start: 2px solid var(--accent-2);
+  }
+  .doc-item p { font-size: 13.5px; line-height: 1.9; color: var(--text-dim); margin: 0; }
+</style>
+</head>
+<body>
+
+{% include "_nav.html" %}
+
+<main>
+
+<div class="page-wrap">
+  <div class="container-mid">
+    <h1 class="title">{{ t('privacy_h1') }}</h1>
+    <div class="card" style="padding:30px 32px">
+      <div class="doc-item">
+        <h2>{{ t('privacy_1_h') }}</h2>
+        <p>{{ t('privacy_1_p') }}</p>
+      </div>
+      <div class="doc-item">
+        <h2>{{ t('privacy_2_h') }}</h2>
+        <p>{{ t('privacy_2_p') }}</p>
+      </div>
+      <div class="doc-item">
+        <h2>{{ t('privacy_3_h') }}</h2>
+        <p>{{ t('privacy_3_p') }}</p>
+      </div>
+      <div class="doc-item">
+        <h2>{{ t('privacy_4_h') }}</h2>
+        <p>{{ t('privacy_4_p') }}</p>
+      </div>
+      <div class="doc-item">
+        <h2>{{ t('privacy_5_h') }}</h2>
+        <p>{{ t('privacy_5_p') }}</p>
+      </div>
+      <div class="doc-item">
+        <h2>{{ t('privacy_6_h') }}</h2>
+        <p>{{ t('privacy_6_p') }}</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+{% include "_footer.html" %}
+</body>
+</html>
