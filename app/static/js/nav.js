@@ -1,36 +1,6 @@
-// Shared nav auth-state — populates the right side of the header on every
-// page based on whether a customer session exists. Keeps one nav markup
-// consistent everywhere instead of duplicating logged-in/out variants.
-(async function () {
-  const slot = document.getElementById('navAuthSlot');
-  if (!slot) return;
-  const i18n = window.__NAV_I18N || { login: 'Log in', signup: 'Sign up', logout: 'Log out' };
-
-  try {
-    const res = await fetch('/api/auth/me');
-    if (res.ok) {
-      const me = await res.json();
-      const initial = me.username.charAt(0).toUpperCase();
-      slot.innerHTML = `
-        <a class="btn btn-ghost btn-sm nav-user-link" href="/dashboard">
-          <span class="nav-user-avatar" aria-hidden="true">${initial}</span>
-          <span class="nav-user-name">${me.username}</span>
-        </a>
-        <button class="btn btn-ghost btn-sm nav-logout-btn" onclick="navLogout()" aria-label="${i18n.logout}">
-          <span class="nav-logout-text">${i18n.logout}</span>
-          <svg class="nav-logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        </button>
-      `;
-      return;
-    }
-  } catch (e) {}
-
-  slot.innerHTML = `
-    <a class="btn btn-ghost btn-sm" href="/login">${i18n.login}</a>
-    <a class="btn btn-primary btn-sm" href="/signup">${i18n.signup}</a>
-  `;
-})();
-
+// #navAuthSlot's logged-in/out markup is rendered server-side (see
+// app/main.py's render() + _nav.html) from the session cookie, so it's
+// correct on first paint — no client fetch needed here anymore.
 async function navLogout() {
   await fetch('/api/auth/logout', {method: 'POST'});
   window.location.href = '/';
@@ -61,6 +31,7 @@ document.addEventListener('keydown', e => {
     drawer.classList.add('open');
     overlay.classList.add('open');
     drawer.setAttribute('aria-hidden', 'false');
+    drawer.inert = false;
     btn.setAttribute('aria-expanded', 'true');
     document.body.style.overflow = 'hidden';
   }
@@ -69,6 +40,11 @@ document.addEventListener('keydown', e => {
     drawer.classList.remove('open');
     overlay.classList.remove('open');
     drawer.setAttribute('aria-hidden', 'true');
+    // `inert` (not just aria-hidden) keeps its links/close-button out of
+    // the Tab order while closed — aria-hidden alone hides it from screen
+    // readers but doesn't stop a sighted keyboard user from tabbing into
+    // an off-screen, invisible drawer.
+    drawer.inert = true;
     btn.setAttribute('aria-expanded', 'false');
     document.body.style.overflow = '';
   }

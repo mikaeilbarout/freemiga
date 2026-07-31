@@ -578,13 +578,18 @@ input:focus, textarea:focus, select:focus {
   gap: 20px;
   max-width: 720px;
   margin: 0 auto;
-  /* Reserves roughly the space 6 loaded cards will occupy so the
-     loading -> loaded swap (plans arrive via a client-side fetch)
-     doesn't shift everything below it — a real CLS source otherwise. */
-  min-height: 560px;
+  /* Reserves the space a full page (6 cards, the pagination size) will
+     occupy so the loading -> loaded swap (plans arrive via a client-side
+     fetch) doesn't shift everything below it — measured directly against
+     6 real rendered cards, not guessed: an earlier, lower guess (560px)
+     was still a measured ~240px short and left a real, Lighthouse-flagged
+     CLS regression on desktop. A page with fewer cards (e.g. the last,
+     partial page) just leaves extra room below — min-height never
+     shrinks the box, so that costs nothing in shift either way. */
+  min-height: 1220px;
 }
 @media (max-width: 640px) {
-  .plans-grid { grid-template-columns: 1fr; max-width: 420px; min-height: 1120px; }
+  .plans-grid { grid-template-columns: 1fr; max-width: 420px; min-height: 2440px; }
 }
 .plan-card {
   position: relative;
@@ -670,6 +675,14 @@ input:focus, textarea:focus, select:focus {
   max-width: 920px; margin: 0 auto; padding: 48px 40px;
   display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap;
   background: linear-gradient(135deg, rgba(124, 92, 255, 0.12), rgba(34, 211, 238, 0.08));
+  /* On /plans this starts empty (h2/p/a text is filled in by JS after a
+     login check) and was a real, measured CLS source — reserves
+     approximately its populated height so filling it in doesn't grow the
+     box and push the footer down. */
+  min-height: 232px;
+}
+@media (max-width: 640px) {
+  .cta-band { min-height: 313px; }
 }
 .cta-band h2 { font-size: 24px; margin-bottom: 6px; }
 .cta-band p { color: var(--text-dim); font-size: 14px; }

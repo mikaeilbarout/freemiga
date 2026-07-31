@@ -17,7 +17,7 @@ from app.config import settings
 from app.database import Base, engine, SessionLocal
 from app.lang import LANG_COOKIE, SUPPORTED_LANGUAGES, resolve_lang
 from app.limiter import limiter
-from app.models import Plan
+from app.models import Customer, Plan
 from app.routers import admin, auth, banners, integrations, orders, payments, plans, support
 from app.services.minify import build_minified_assets
 from app.services.telegram import telegram_link_loop
@@ -165,6 +165,22 @@ def render(request: Request, template_name: str, *, force_lang: str = None, stat
     else:
         lang_switch_url = f"/set-language?lang={other_lang}&next={path}"
 
+    # Rendered server-side (instead of fetched client-side after paint) so
+    # the nav's logged-in/out state is correct in the very first response
+    # and never has to grow into place — that growth was a measured
+    # ~0.11 CLS regression (an empty #navAuthSlot snapping to its real
+    # size once /api/auth/me resolved).
+    nav_user = None
+    customer_id = request.session.get("customer_id")
+    if customer_id:
+        nav_db = SessionLocal()
+        try:
+            customer = nav_db.query(Customer).filter(Customer.id == customer_id).first()
+            if customer and not customer.is_deleted:
+                nav_user = customer.username
+        finally:
+            nav_db.close()
+
     context = {
         "request": request,
         "site_name": settings.SITE_NAME,
@@ -172,6 +188,7 @@ def render(request: Request, template_name: str, *, force_lang: str = None, stat
         "dir": "rtl" if lang == "fa" else "ltr",
         "t": lambda key, **kw: i18n.t(lang, key, **kw),
         "asset_version": ASSET_VERSION,
+        "nav_user": nav_user,
         # Every template can link to a marketing page in the visitor's
         # current language via {{ lang_prefix }}/plans etc., whether the
         # current page itself is a localized one or not (e.g. /pay/{id}
