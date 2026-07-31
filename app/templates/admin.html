@@ -206,6 +206,13 @@ async function adminLogin() {
 }
 
 const ADMIN_PAGE_SIZE = 10;
+let grantPlansCache = null;
+async function getGrantPlansCache() {
+  if (grantPlansCache) return grantPlansCache;
+  const res = await fetch('/api/admin/plans');
+  grantPlansCache = res.ok ? await res.json() : [];
+  return grantPlansCache;
+}
 let customerPage = 1, customerSearchTimer = null;
 let orderPage = 1, orderSearchTimer = null;
 let ticketPage = 1;
@@ -223,6 +230,10 @@ function renderPaginationBar(prefix, page, total) {
 }
 
 function customerRowHtml(c) {
+  const canGrant = !c.is_deleted && !c.is_banned;
+  const planOptions = (grantPlansCache || []).map(p =>
+    `<option value="${p.id}">${escapeHtml(p.name)} — $${p.price_usdt}</option>`
+  ).join('');
   return `
     <div class="list-row">
       <div class="lr-main">
@@ -236,18 +247,61 @@ function customerRowHtml(c) {
             ${c.is_banned
               ? `<button class="btn btn-ghost btn-sm" onclick="unban('${c.id}')">Lift</button>`
               : `<button class="btn btn-danger btn-sm" onclick="banPrompt('${c.id}')">Suspend</button>`}
+            ${canGrant ? `<button class="btn btn-ghost btn-sm" onclick="toggleGrantPlan('${c.id}')">Grant plan</button>` : ''}
           </div>
         `}
       </div>
     </div>
+    ${canGrant ? `
+      <div class="new-plan-card" id="grantPlan-${c.id}" style="display:none; margin-top:10px; padding-top:12px; border-top:1px solid var(--border, #333)">
+        <label>Plan to grant (at no charge — logged in the activity log)</label>
+        <select id="grantPlanSelect-${c.id}">${planOptions}</select>
+        <label>Note (optional — shown in the activity log)</label>
+        <input id="grantPlanNote-${c.id}" placeholder="e.g. compensation for a support issue">
+        <button class="btn btn-primary btn-sm" onclick="submitGrantPlan('${c.id}')">Grant</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleGrantPlan('${c.id}')">Cancel</button>
+        <div class="field-err" id="grantPlanErr-${c.id}"></div>
+      </div>
+    ` : ''}
   `;
+}
+
+function toggleGrantPlan(id) {
+  const el = document.getElementById(`grantPlan-${id}`);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function submitGrantPlan(customerId) {
+  const planId = document.getElementById(`grantPlanSelect-${customerId}`).value;
+  const note = document.getElementById(`grantPlanNote-${customerId}`).value.trim();
+  const err = document.getElementById(`grantPlanErr-${customerId}`);
+  err.textContent = '';
+  if (!planId) { err.textContent = 'No plans exist yet — create one in the Plans tab first.'; return; }
+
+  const res = await fetch(`/api/admin/customers/${customerId}/grant-plan`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({plan_id: planId, note: note || null}),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    err.textContent = data.detail || 'Could not grant this plan.';
+    return;
+  }
+  const data = await res.json();
+  if (data.status === 'provisioned') {
+    showToast('Plan granted and provisioned.', 'success');
+  } else {
+    showToast('Order created but provisioning failed — check the activity log and Marzban directly.', 'error');
+  }
+  loadCustomers(false);
 }
 
 async function loadCustomers(reset = true) {
   if (reset) { customerPage = 1; }
   const search = document.getElementById('customerSearch').value.trim();
   const params = new URLSearchParams({page: customerPage, page_size: ADMIN_PAGE_SIZE, search});
-  const res = await fetch(`/api/admin/customers?${params}`);
+  const [res] = await Promise.all([fetch(`/api/admin/customers?${params}`), getGrantPlansCache()]);
   if (!res.ok) return;
   const data = await res.json();
   const container = document.getElementById('customerRows');

@@ -241,6 +241,11 @@ class BanIn(BaseModel):
     reason: str
 
 
+class GrantPlanIn(BaseModel):
+    plan_id: str
+    note: Optional[str] = None
+
+
 class OrderAdminOut(BaseModel):
     id: str
     customer_username: str

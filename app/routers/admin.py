@@ -1,4 +1,5 @@
 import hmac
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from sqlalchemy import or_
@@ -15,6 +16,7 @@ from app.models import (
     Customer,
     Order,
     OrderStatus,
+    PaymentMethod,
     Plan,
     SupportTicket,
     TicketMessage,
@@ -24,6 +26,7 @@ from app.schemas import (
     AdminLoginIn,
     BanIn,
     CustomerAdminOut,
+    GrantPlanIn,
     OrderAdminOut,
     PlanCreate,
     PlanOut,
@@ -257,6 +260,62 @@ async def unban_customer(customer_id: str, db: Session = Depends(get_db)):
         await telegram.send_message(customer.telegram_chat_id, "✅ Your account suspension has been lifted.")
 
     return {"ok": True}
+
+
+@router.post("/customers/{customer_id}/grant-plan", dependencies=[Depends(require_admin)])
+async def grant_plan(customer_id: str, payload: GrantPlanIn, db: Session = Depends(get_db)):
+    """The correct way to hand a customer VPN access outside a normal
+    purchase (comp access, support goodwill, etc.) — creates the same
+    Order + provisioning trail a real purchase would, at $0, so the
+    customer's dashboard, order history, and vpn-status all stay accurate
+    instead of silently going out of sync with what's actually running in
+    Marzban. Reuses create_vpn_user/extend_vpn_user exactly as a normal
+    order does, including the fallback that now handles a username Marzban
+    already knows about (e.g. one an admin created directly in Marzban's
+    own panel before this endpoint existed) instead of failing outright."""
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(404, "Customer not found")
+    if customer.is_deleted:
+        raise HTTPException(400, "Cannot grant a plan to a deleted account")
+    if customer.is_banned:
+        # Provisioning always sets the Marzban user's status to "active" —
+        # granting a plan to a suspended customer would silently undo their
+        # own suspension. Lift it first if that's really the intent.
+        raise HTTPException(400, "This customer is suspended — lift the suspension before granting a plan")
+
+    plan = db.query(Plan).filter(Plan.id == payload.plan_id).first()
+    if not plan:
+        raise HTTPException(404, "Plan not found")
+
+    already_has_account = (
+        db.query(Order)
+        .filter(Order.customer_id == customer.id, Order.status == OrderStatus.provisioned)
+        .first()
+        is not None
+    )
+
+    order = Order(
+        customer_id=customer.id,
+        plan_id=plan.id,
+        is_renewal=already_has_account,
+        payment_method=PaymentMethod.free,
+        amount_due=0,
+        status=OrderStatus.pending,
+        expires_at=datetime.utcnow() + timedelta(minutes=settings.ORDER_EXPIRY_MINUTES),
+    )
+    db.add(order)
+    db.commit()
+    db.refresh(order)
+
+    _log_action(
+        db, "grant_plan", customer_id,
+        f"{plan.name}" + (f" — {payload.note}" if payload.note else ""),
+    )
+
+    await _provision(order, db)
+    db.refresh(order)
+    return {"ok": True, "status": order.status.value, "subscription_url": order.subscription_url}
 
 
 @router.post("/orders/{order_id}/confirm", dependencies=[Depends(require_admin)])

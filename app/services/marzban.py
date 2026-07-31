@@ -38,8 +38,14 @@ async def _get_token() -> str:
 
 async def create_vpn_user(username: str, data_limit_gb: int, duration_days: int) -> dict:
     """
-    Creates (or, if it already exists, raises) a Marzban user wired to the
-    configured VLESS inbound, and returns the full subscription URL.
+    Creates a Marzban user wired to the configured VLESS inbound and
+    returns the full subscription URL. If a user with this username
+    already exists in Marzban — most commonly because an admin created it
+    by hand directly in Marzban's own panel, bypassing this shop entirely —
+    falls back to extending that existing account instead of failing the
+    order outright. Without this, a customer's very first real purchase
+    would permanently fail with a 409 from Marzban the moment their
+    username collided with anything already provisioned out-of-band.
     """
     token = await _get_token()
     expire_ts = int((datetime.utcnow() + timedelta(days=duration_days)).timestamp())
@@ -61,6 +67,8 @@ async def create_vpn_user(username: str, data_limit_gb: int, duration_days: int)
             headers={"Authorization": f"Bearer {token}"},
             json=payload,
         )
+        if resp.status_code == 409:
+            return await extend_vpn_user(username, data_limit_gb, duration_days)
         resp.raise_for_status()
         data = resp.json()
 
