@@ -13,7 +13,11 @@
 
   --text: #f4f6fb;
   --text-dim: #9aa3b5;
-  --text-faint: #636d82;
+  /* Was #636d82 (3.90:1 on --bg) — fails WCAG AA for normal-size text
+     (needs 4.5:1) and this token is used at 12-13px in several places
+     (timestamps, the .faint utility, toast close button). Lightened to
+     4.89:1 while keeping it visibly dimmer than --text-dim. */
+  --text-faint: #717d95;
 
   --accent: #7c5cff;
   --accent-2: #22d3ee;

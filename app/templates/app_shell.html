@@ -291,7 +291,7 @@
       <div class="ban-notice" id="banNoticeBilling"></div>
 
       <section class="accordion-block open" data-block="plans">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)">
           <div class="accordion-title">{{ t('available_plans') }}</div>
           <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </div>
@@ -319,7 +319,7 @@
       </section>
 
       <section class="accordion-block" data-block="order-history">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)">
           <div class="accordion-title">{{ t('order_history') }}</div>
           <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </div>
@@ -337,7 +337,7 @@
       </div>
 
       <section class="accordion-block open" data-block="profile">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)">
           <div class="accordion-title">{{ t('account_profile') }}</div>
           <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </div>
@@ -370,7 +370,7 @@
       </section>
 
       <section class="accordion-block" data-block="telegram" id="telegramSection" style="display:none">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)">
           <div class="accordion-title">{{ t('account_telegram_section_h') }}</div>
           <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </div>
@@ -380,7 +380,7 @@
       </section>
 
       <section class="accordion-block" data-block="password">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)">
           <div class="accordion-title">{{ t('account_change_password') }}</div>
           <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </div>
@@ -400,7 +400,7 @@
       </section>
 
       <section class="accordion-block" data-block="danger" style="border-color:rgba(251,113,133,0.35)">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)">
           <div class="accordion-title" style="color:var(--danger)">{{ t('account_danger_zone') }}</div>
           <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </div>
@@ -503,8 +503,17 @@ activateSection(INITIAL_SECTION);
 function toggleAccordion(header) {
   const block = header.closest('.accordion-block');
   block.classList.toggle('open');
+  header.setAttribute('aria-expanded', block.classList.contains('open'));
   syncAccordionHeight(block);
 }
+
+// The "Available plans" and "Profile" sections render already expanded
+// (class="accordion-block open" in the template) — sync their header's
+// aria-expanded to match on load instead of leaving it at the HTML
+// default of "false".
+document.querySelectorAll('.accordion-header').forEach(h => {
+  h.setAttribute('aria-expanded', h.closest('.accordion-block').classList.contains('open'));
+});
 
 // The open/close animation needs *some* max-height to transition to/from,
 // but a fixed cap (the CSS default is a fallback only) clips any accordion
@@ -1104,7 +1113,7 @@ async function loadTickets() {
     const isOpen = openTicketIds.has(t.id);
     return `
     <div class="accordion-block ticket-block${isOpen ? ' open' : ''}">
-      <div class="accordion-header" onclick="toggleTicketAccordion(this, '${t.id}', ${t.customer_unread})">
+      <div class="accordion-header" role="button" tabindex="0" aria-expanded="${isOpen}" onclick="toggleTicketAccordion(this, '${t.id}', ${t.customer_unread})">
         <div class="accordion-title">${escapeHtml(t.subject)}</div>
         <div style="display:flex;align-items:center;gap:8px">
           ${t.customer_unread ? `<span class="badge badge-warning ticket-unread-pill">${escapeHtml(SUPPORT_I18N.newReply)}</span>` : ''}
@@ -1139,6 +1148,7 @@ function toggleTicketAccordion(header, ticketId, wasUnread) {
   const block = header.closest('.accordion-block');
   const opening = !block.classList.contains('open');
   block.classList.toggle('open');
+  header.setAttribute('aria-expanded', opening);
   syncAccordionHeight(block);
   if (opening) {
     openTicketIds.add(ticketId);

@@ -196,7 +196,7 @@ async function loadBanners() {
       </div>
     `;
     }).join('');
-    dots.innerHTML = banners.map((_, i) => `<div class="banner-dot ${i === 0 ? 'active' : ''}" data-i="${i}"></div>`).join('');
+    dots.innerHTML = banners.map((_, i) => `<div class="banner-dot ${i === 0 ? 'active' : ''}" data-i="${i}" role="button" tabindex="0" aria-label="Slide ${i + 1}"></div>`).join('');
 
     dots.querySelectorAll('.banner-dot').forEach(dot => {
       dot.addEventListener('click', () => showBanner(parseInt(dot.dataset.i), banners.length));

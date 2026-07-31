@@ -76,13 +76,13 @@
     <div class="admin-header">
       <span class="brand"><span class="brand-mark">F</span><span class="brand-name">{{ site_name }}</span><span class="muted" style="font-size:13px;margin-left:6px">Admin</span></span>
     </div>
-    <div class="tabs">
-      <div class="tab active" data-tab="customers">Customers</div>
-      <div class="tab" data-tab="orders">Orders</div>
-      <div class="tab" data-tab="tickets">Support</div>
-      <div class="tab" data-tab="plans">Plans</div>
-      <div class="tab" data-tab="banners">Banners</div>
-      <div class="tab" data-tab="auditlog">Activity log</div>
+    <div class="tabs" role="tablist">
+      <div class="tab active" data-tab="customers" role="tab" tabindex="0" aria-selected="true">Customers</div>
+      <div class="tab" data-tab="orders" role="tab" tabindex="0" aria-selected="false">Orders</div>
+      <div class="tab" data-tab="tickets" role="tab" tabindex="0" aria-selected="false">Support</div>
+      <div class="tab" data-tab="plans" role="tab" tabindex="0" aria-selected="false">Plans</div>
+      <div class="tab" data-tab="banners" role="tab" tabindex="0" aria-selected="false">Banners</div>
+      <div class="tab" data-tab="auditlog" role="tab" tabindex="0" aria-selected="false">Activity log</div>
     </div>
     <div id="customers">
       <div class="list-toolbar">
@@ -162,9 +162,20 @@
 {% include "_footer.html" %}
 
 <script>
+// admin.html doesn't include _nav.html (no site header here), so it never
+// loads nav.js — this page's own copy of the same role="button"/role="tab"
+// Enter/Space activation (ticket rows, the tab strip below).
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"], [role="tab"]')) {
+    e.preventDefault();
+    e.target.click();
+  }
+});
+
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
-  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(x => { x.classList.remove('active'); x.setAttribute('aria-selected', 'false'); });
   t.classList.add('active');
+  t.setAttribute('aria-selected', 'true');
   ['customers','orders','tickets','plans','banners','auditlog'].forEach(id => {
     document.getElementById(id).style.display = id === t.dataset.tab ? 'block' : 'none';
   });
@@ -338,7 +349,7 @@ function ticketCardHtml(t) {
   const cardClass = isOpen ? 'ticket-open' : (t.needs_reply ? 'ticket-needs-reply' : '');
   return `
     <div class="card row-card ${cardClass}" id="ticket-card-${t.id}">
-      <div class="row-top" style="cursor:pointer" onclick="toggleAdminTicket('${t.id}')">
+      <div class="row-top" style="cursor:pointer" role="button" tabindex="0" aria-expanded="${isOpen}" onclick="toggleAdminTicket('${t.id}')">
         <div class="name">${escapeHtml(t.customer_username)} — ${escapeHtml(t.subject)}</div>
         <div style="display:flex;gap:6px;align-items:center">
           ${t.needs_reply ? '<span class="badge badge-warning">Needs reply</span>' : ''}
@@ -370,10 +381,12 @@ function toggleAdminTicket(id) {
   const body = document.getElementById(`ticket-body-${id}`);
   const chevron = document.getElementById(`chev-${id}`);
   const card = document.getElementById(`ticket-card-${id}`);
+  const header = card.querySelector('.row-top');
   const opening = body.style.display === 'none';
   body.style.display = opening ? 'block' : 'none';
   chevron.classList.toggle('open', opening);
   card.classList.toggle('ticket-open', opening);
+  header.setAttribute('aria-expanded', opening);
   if (opening) { openAdminTicketIds.add(id); } else { openAdminTicketIds.delete(id); }
 }
 

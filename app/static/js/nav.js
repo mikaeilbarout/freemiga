@@ -36,6 +36,17 @@ async function navLogout() {
   window.location.href = '/';
 }
 
+// Styled clickable <div>s (accordion headers, ticket rows, admin tabs,
+// carousel dots) use role="button"/role="tab" for screen readers, but that
+// alone doesn't give them the Enter/Space activation a native <button>
+// gets for free — wired up once, site-wide, instead of per-template.
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"], [role="tab"]')) {
+    e.preventDefault();
+    e.target.click();
+  }
+});
+
 // Mobile nav drawer — the top-bar links (Plans, How it works, Features,
 // Setup guide) are hidden below 720px for space; the hamburger opens this
 // off-canvas panel to reach them instead.
