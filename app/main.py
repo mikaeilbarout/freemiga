@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import i18n
@@ -18,6 +19,7 @@ from app.lang import LANG_COOKIE, SUPPORTED_LANGUAGES, resolve_lang
 from app.limiter import limiter
 from app.models import Plan
 from app.routers import admin, auth, banners, integrations, orders, payments, plans, support
+from app.services.minify import build_minified_assets
 from app.services.telegram import telegram_link_loop
 
 logging.basicConfig(level=logging.INFO)
@@ -73,9 +75,65 @@ app.add_middleware(
     same_site="lax",
     https_only=settings.SESSION_COOKIE_SECURE,
 )
+# Compresses every response body over 500 bytes (HTML/CSS/JS/JSON) —
+# added last so it wraps everything else and compresses the final output.
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
+_CSP = (
+    "default-src 'self'; "
+    # Inline <script> blocks and onclick="..." handlers are used
+    # throughout every template (not a build-step SPA) — 'unsafe-inline'
+    # is required or the entire site's interactivity breaks. A stricter
+    # nonce-based policy would need every inline handler rewritten to
+    # addEventListener first; noted as follow-up work, not attempted here
+    # given "never break existing functionality".
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
+    response.headers["Content-Security-Policy"] = _CSP
+    if settings.SESSION_COOKIE_SECURE:
+        # Only advertised when the deployment actually expects HTTPS (same
+        # flag that gates Secure-only cookies) — sending this over plain
+        # HTTP is meaningless and would be actively wrong for local/dev use.
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
+class CachedStaticFiles(StaticFiles):
+    """Static assets are already cache-busted via the ?v=asset_version
+    query param appended everywhere they're linked (see ASSET_VERSION
+    below), so it's safe to tell browsers to cache the underlying files
+    indefinitely — a new deploy changes the URL, not the cached one."""
+
+    def file_response(self, *args, **kwargs) -> Response:
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
 
 templates = Jinja2Templates(directory="app/templates")
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/static", CachedStaticFiles(directory="app/static"), name="static")
+
+# Minified .min.css/.min.js siblings, served instead of the hand-written
+# originals — must run before ASSET_VERSION below, since that value gets
+# baked into every asset URL the templates render.
+build_minified_assets()
 
 # Cache-busting query param for static assets (?v=...) — computed once at
 # startup from style.css's mtime, which changes on every image rebuild

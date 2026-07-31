@@ -1,7 +1,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/css/style.css?v={{ asset_version }}">
+<!-- Loaded async (preload as style, swap the media on load) instead of a
+     plain blocking <link rel="stylesheet"> — the font CSS itself is tiny
+     but was still a render-blocking round-trip to Google's CDN on every
+     page; the `noscript` fallback covers the no-JS/JS-not-yet-run case. -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
+<link rel="stylesheet" href="/static/css/style.min.css?v={{ asset_version }}">
 
 <!-- Same gradient "F" mark as .brand-mark — shown in the browser tab and,
      once Google recrawls, next to the title in search results. -->
@@ -11,4 +17,4 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/static/img/icon-192.png?v={{ asset_version }}">
 <link rel="apple-touch-icon" sizes="180x180" href="/static/img/icon-180.png?v={{ asset_version }}">
 
-<script src="/static/js/toast.js?v={{ asset_version }}"></script>
+<script src="/static/js/toast.min.js?v={{ asset_version }}" defer></script>

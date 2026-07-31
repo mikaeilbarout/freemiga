@@ -574,9 +574,13 @@ input:focus, textarea:focus, select:focus {
   gap: 20px;
   max-width: 720px;
   margin: 0 auto;
+  /* Reserves roughly the space 6 loaded cards will occupy so the
+     loading -> loaded swap (plans arrive via a client-side fetch)
+     doesn't shift everything below it — a real CLS source otherwise. */
+  min-height: 560px;
 }
 @media (max-width: 640px) {
-  .plans-grid { grid-template-columns: 1fr; max-width: 420px; }
+  .plans-grid { grid-template-columns: 1fr; max-width: 420px; min-height: 1120px; }
 }
 .plan-card {
   position: relative;

@@ -1117,7 +1117,7 @@ async function loadTickets() {
           ${t.messages.map(m => `
             <div class="msg ${m.sender}">
               ${escapeHtml(m.body)}
-              ${m.attachment_path ? `<a href="${m.attachment_path}" target="_blank" rel="noopener"><img src="${m.attachment_path}" class="msg-attachment" alt=""></a>` : ''}
+              ${m.attachment_path ? `<a href="${m.attachment_path}" target="_blank" rel="noopener"><img src="${m.attachment_path}" class="msg-attachment" alt="" loading="lazy" decoding="async"></a>` : ''}
             </div>
           `).join('')}
           ${t.status === 'open' ? `

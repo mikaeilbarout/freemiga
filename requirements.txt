@@ -11,3 +11,5 @@ stripe==11.1.1
 psycopg2-binary==2.9.9
 gunicorn==23.0.0
 geoip2==4.8.0
+rcssmin==1.2.2
+rjsmin==1.2.5

@@ -186,7 +186,7 @@ async function loadBanners() {
       return `
       <div class="banner-slide ${i === 0 ? 'active' : ''}" data-i="${i}">
         ${link ? `<a href="${link}" style="position:absolute;inset:0;z-index:2"></a>` : ''}
-        <img src="${image}" alt="${headline}">
+        <img src="${image}" alt="${headline}" decoding="async" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'}>
         ${(headline || subtext) ? `
           <div class="overlay">
             ${headline ? `<h3>${headline}</h3>` : ''}

@@ -3,7 +3,7 @@ import hmac
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.background import _provision
 from app.config import settings
@@ -170,6 +170,10 @@ def list_orders(
         db.query(Order)
         .join(Customer, Order.customer_id == Customer.id)
         .join(Plan, Order.plan_id == Plan.id)
+        # The joins above are for filtering (status/q) only — a bare join
+        # doesn't populate o.customer/o.plan, so without this every order
+        # in the page would trigger two more lazy-load queries below.
+        .options(selectinload(Order.customer), selectinload(Order.plan))
         .filter(Order.status != OrderStatus.cancelled)
     )
     if status:
@@ -305,7 +309,9 @@ def list_tickets(
     page: int = 1,
     page_size: int = 25,
 ):
-    query = db.query(SupportTicket)
+    query = db.query(SupportTicket).options(
+        selectinload(SupportTicket.customer), selectinload(SupportTicket.messages)
+    )
     if open_only:
         query = query.filter(SupportTicket.status == TicketStatus.open)
     if q:
@@ -324,6 +330,16 @@ def list_tickets(
         .limit(page_size)
         .all()
     )
+
+    # One batched lookup for every guest ticket's claimed username instead
+    # of a query per ticket (was a real N+1 — a page of mostly-guest
+    # tickets meant one extra round trip per row).
+    guest_usernames = {t.guest_username for t in tickets if not t.customer_id and t.guest_username}
+    matched_by_username = {}
+    if guest_usernames:
+        for c in db.query(Customer).filter(Customer.username.in_(guest_usernames)).all():
+            matched_by_username[c.username] = c
+
     out = []
     for t in tickets:
         display_name = t.customer.username if t.customer else f"{t.guest_username} (guest)"
@@ -336,7 +352,7 @@ def list_tickets(
         registered_email = None
         identity_mismatch = False
         if not t.customer and t.guest_username:
-            matched = db.query(Customer).filter(Customer.username == t.guest_username).first()
+            matched = matched_by_username.get(t.guest_username)
             if matched and matched.email:
                 registered_email = _mask_email(matched.email)
                 claimed = (t.guest_contact or "").strip().lower()

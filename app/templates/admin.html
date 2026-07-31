@@ -352,7 +352,7 @@ function ticketCardHtml(t) {
         ${t.messages.map(m => `
           <div class="msg ${m.sender}">
             ${escapeHtml(m.body)}
-            ${m.attachment_path ? `<a href="${m.attachment_path}" target="_blank" rel="noopener"><img src="${m.attachment_path}" style="max-width:220px;max-height:160px;border-radius:8px;display:block;margin-top:8px;border:1px solid var(--border)" alt=""></a>` : ''}
+            ${m.attachment_path ? `<a href="${m.attachment_path}" target="_blank" rel="noopener"><img src="${m.attachment_path}" style="max-width:220px;max-height:160px;border-radius:8px;display:block;margin-top:8px;border:1px solid var(--border)" alt="" loading="lazy" decoding="async"></a>` : ''}
           </div>
         `).join('')}
         <textarea id="reply-${t.id}" rows="2" placeholder="Write a reply..." style="margin-top:10px"></textarea>
@@ -502,7 +502,7 @@ async function loadBanners() {
         <div class="name">${b.headline || '<span class="faint">(no headline)</span>'}</div>
         <span class="badge ${b.is_active ? 'badge-success' : 'badge-neutral'}">${b.is_active ? 'Active' : 'Hidden'}</span>
       </div>
-      <img src="${b.image_path}" alt="${b.headline || ''}" style="width:100%;max-width:280px;border-radius:8px;margin:8px 0;display:block">
+      <img src="${b.image_path}" alt="${b.headline || ''}" style="width:100%;max-width:280px;border-radius:8px;margin:8px 0;display:block" loading="lazy" decoding="async">
       <div class="row-meta">${b.subtext || '—'}${b.link_url ? ' · links to ' + b.link_url : ''} · order ${b.sort_order}</div>
       <div class="actions">
         <button class="btn btn-ghost btn-sm" onclick="toggleBanner('${b.id}', ${!b.is_active})">${b.is_active ? 'Hide' : 'Show'}</button>

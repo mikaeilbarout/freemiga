@@ -15,6 +15,10 @@ docker-compose.override.yml
 # Runtime data — uploaded at runtime, not part of the source tree
 app/static/uploads/
 
+# Regenerated from source at every app startup (see app/services/minify.py)
+app/static/css/*.min.css
+app/static/js/*.min.js
+
 # MaxMind GeoLite2 DB — user-supplied under their own license (see README),
 # not redistributed via the repo
 app/data/*.mmdb

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app import i18n
 from app.auth import get_current_customer
@@ -113,6 +113,7 @@ def my_tickets(
     # only when a ticket is actually expanded.
     return (
         db.query(SupportTicket)
+        .options(selectinload(SupportTicket.messages))
         .filter(SupportTicket.customer_id == customer.id)
         .order_by(SupportTicket.created_at.desc())
         .all()
