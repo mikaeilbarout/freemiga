@@ -197,6 +197,9 @@ def render(request: Request, template_name: str, *, force_lang: str = None, stat
         "lang_prefix": f"/{lang}",
         "lang_switch_url": lang_switch_url,
         "site_base_url": settings.SITE_BASE_URL,
+        "ga_measurement_id": settings.GA_MEASUREMENT_ID,
+        "gsc_verification": settings.GSC_VERIFICATION,
+        "bing_verification": settings.BING_VERIFICATION,
         **extra_context,
     }
     response = templates.TemplateResponse(template_name, context, status_code=status_code)
@@ -296,6 +299,16 @@ def robots_txt():
         f"Sitemap: {site}/sitemap.xml",
     ]
     return "\n".join(lines)
+
+
+# Required by the IndexNow protocol so a search engine can confirm this
+# site actually controls the key it's pinging with — only registered at
+# all once an operator sets INDEXNOW_KEY, same "empty means not set up
+# yet" convention as the other search-engine settings.
+if settings.INDEXNOW_KEY:
+    @app.get(f"/{settings.INDEXNOW_KEY}.txt", response_class=PlainTextResponse)
+    def indexnow_key_file():
+        return settings.INDEXNOW_KEY
 
 
 @app.get("/sitemap.xml")

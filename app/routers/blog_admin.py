@@ -4,11 +4,20 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session, selectinload
 
 from app.auth import require_admin
+from app.config import settings
 from app.database import get_db
 from app.models import BlogCategory, BlogPost, BlogPostStatus, BlogTag
 from app.schemas import BlogCategoryOut, BlogPostAdminOut, BlogTagOut
+from app.services import indexnow
 from app.services.blog import reading_time_minutes, slugify
 from app.services.uploads import read_validated_image, save_image
+
+
+async def _ping_indexnow_if_published(post: BlogPost) -> None:
+    if post.status != BlogPostStatus.published:
+        return
+    site = settings.SITE_BASE_URL.rstrip("/")
+    await indexnow.ping_urls([f"{site}/en/blog/{post.slug}", f"{site}/fa/blog/{post.slug}"])
 
 router = APIRouter(
     prefix="/api/admin/blog", tags=["admin-blog"], dependencies=[Depends(require_admin)]
@@ -173,6 +182,7 @@ async def create_post(
     db.add(post)
     db.commit()
     db.refresh(post)
+    await _ping_indexnow_if_published(post)
     return post
 
 
@@ -237,6 +247,7 @@ async def update_post(
 
     db.commit()
     db.refresh(post)
+    await _ping_indexnow_if_published(post)
     return post
 
 

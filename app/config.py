@@ -100,6 +100,18 @@ class Settings:
 
     SITE_NAME: str = os.getenv("SITE_NAME", "Freemiga")
 
+    # Search engine / analytics verification — all optional, empty means
+    # "not set up yet" and the corresponding tag/route is simply omitted
+    # rather than emitting a broken placeholder.
+    GA_MEASUREMENT_ID: str = os.getenv("GA_MEASUREMENT_ID", "")  # e.g. "G-XXXXXXXXXX"
+    GSC_VERIFICATION: str = os.getenv("GSC_VERIFICATION", "")  # Search Console HTML tag content=""
+    BING_VERIFICATION: str = os.getenv("BING_VERIFICATION", "")  # Bing Webmaster Tools meta content
+    # IndexNow key — any string you choose. Once set, the site serves
+    # GET /{key}.txt (required by the protocol so search engines can
+    # confirm you control the domain) and pings IndexNow after each blog
+    # post is published (see app/services/indexnow.py).
+    INDEXNOW_KEY: str = os.getenv("INDEXNOW_KEY", "")
+
     # Language (website i18n)
     # Local MaxMind GeoLite2-Country database used to pick the default
     # language for a first-time visitor. See README for how to get one —
