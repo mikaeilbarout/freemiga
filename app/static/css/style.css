@@ -675,14 +675,6 @@ input:focus, textarea:focus, select:focus {
   max-width: 920px; margin: 0 auto; padding: 48px 40px;
   display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap;
   background: linear-gradient(135deg, rgba(124, 92, 255, 0.12), rgba(34, 211, 238, 0.08));
-  /* On /plans this starts empty (h2/p/a text is filled in by JS after a
-     login check) and was a real, measured CLS source — reserves
-     approximately its populated height so filling it in doesn't grow the
-     box and push the footer down. */
-  min-height: 232px;
-}
-@media (max-width: 640px) {
-  .cta-band { min-height: 313px; }
 }
 .cta-band h2 { font-size: 24px; margin-bottom: 6px; }
 .cta-band p { color: var(--text-dim); font-size: 14px; }
