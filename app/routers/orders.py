@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.exc import IntegrityError
@@ -12,7 +13,7 @@ from app.database import get_db
 from app.lang import get_lang
 from app.models import Customer, Order, OrderStatus, PaymentMethod, Plan
 from app.schemas import OrderCreate, OrderOut, VerifyPaymentIn
-from app.services import order_service, polygon_gateway, stripe_gateway, tron_gateway
+from app.services import marzban, order_service, polygon_gateway, stripe_gateway, tron_gateway
 
 CRYPTO_GATEWAYS = {"tron": tron_gateway, "polygon": polygon_gateway}
 
@@ -295,3 +296,40 @@ def my_orders(
         .order_by(Order.created_at.desc())
         .all()
     )
+
+
+@router.get("/vpn-status/me")
+async def vpn_status(customer: Customer = Depends(get_current_customer)):
+    """The customer's own VPN account is a single Marzban user shared across
+    every renewal, so 'is my plan still active' isn't something the local
+    Order rows alone can answer accurately (a renewal extends from whichever
+    is later — current expiry or now — see services/marzban.py) — this asks
+    Marzban directly, live, rather than estimating from order-creation dates
+    the way the dashboard's summary card used to."""
+    try:
+        data = await marzban.get_vpn_user(customer.username)
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            return {
+                "has_account": False, "subscription_url": None,
+                "marzban_status": None, "expire_at": None, "unreachable": False,
+            }
+        return {
+            "has_account": False, "subscription_url": None,
+            "marzban_status": None, "expire_at": None, "unreachable": True,
+        }
+    except httpx.HTTPError:
+        return {
+            "has_account": False, "subscription_url": None,
+            "marzban_status": None, "expire_at": None, "unreachable": True,
+        }
+
+    sub_path = data.get("subscription_url") or ""
+    expire_ts = data.get("expire")
+    return {
+        "has_account": True,
+        "subscription_url": f"{settings.MARZBAN_BASE_URL}{sub_path}" if sub_path else None,
+        "marzban_status": data.get("status"),  # "active" | "expired" | "limited" | "disabled"
+        "expire_at": datetime.utcfromtimestamp(expire_ts).isoformat() + "Z" if expire_ts else None,
+        "unreachable": False,
+    }

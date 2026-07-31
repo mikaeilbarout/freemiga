@@ -240,6 +240,7 @@
               <div class="status-sub" id="statusSub"></div>
             </div>
             <div class="status-hero-actions">
+              <button class="btn btn-ghost btn-sm" id="statusVpnLinkBtn" style="display:none" onclick="copyStatusVpnLink()">{{ t('pay_copy_link') }}</button>
               <a class="btn btn-primary btn-sm" id="statusCta" href="/billing">{{ t('dashboard_buy_plan') }}</a>
             </div>
           </div>
@@ -547,6 +548,15 @@ const DASH_I18N = {
   statusActivePlan: {{ t('dashboard_status_active_plan')|tojson }},
   statusRenews: {{ t('dashboard_status_renews', date='__DATE__')|tojson }},
   statusActiveGeneric: {{ t('dashboard_status_active_generic')|tojson }},
+  statusActiveUntil: {{ t('dashboard_status_active_until', date='__DATE__')|tojson }},
+  statusExpired: {{ t('dashboard_status_expired', name='__NAME__')|tojson }},
+  statusExpiredSub: {{ t('dashboard_status_expired_sub')|tojson }},
+  statusLimited: {{ t('dashboard_status_limited', name='__NAME__')|tojson }},
+  statusLimitedSub: {{ t('dashboard_status_limited_sub')|tojson }},
+  statusDisabled: {{ t('dashboard_status_disabled', name='__NAME__')|tojson }},
+  statusDisabledSub: {{ t('dashboard_status_disabled_sub')|tojson }},
+  vpnLinkCopied: {{ t('dashboard_link_copied')|tojson }},
+  copyLink: {{ t('pay_copy_link')|tojson }},
   renewPlan: {{ t('dashboard_renew_plan')|tojson }},
   orderPendingName: {{ t('dashboard_order_pending_name')|tojson }},
   orderPendingSub: {{ t('dashboard_order_pending_sub')|tojson }},
@@ -604,10 +614,21 @@ async function loadMeDashboard() {
   }
 }
 
+let statusVpnLink = null;
+
+function copyStatusVpnLink() {
+  if (!statusVpnLink) return;
+  navigator.clipboard.writeText(statusVpnLink);
+  showToast(DASH_I18N.vpnLinkCopied, 'success');
+}
+
 async function loadStatus() {
-  const [ordersRes, plansRes] = await Promise.all([fetch('/api/orders'), fetch('/api/plans')]);
+  const [ordersRes, plansRes, vpnRes] = await Promise.all([
+    fetch('/api/orders'), fetch('/api/plans'), fetch('/api/orders/vpn-status/me'),
+  ]);
   const orders = await ordersRes.json();
   const plans = await plansRes.json();
+  const vpn = vpnRes.ok ? await vpnRes.json() : { has_account: false, unreachable: true };
   const planById = Object.fromEntries(plans.map(p => [p.id, p]));
 
   const freePlan = plans.find(p => p.price_usdt === 0);
@@ -626,8 +647,44 @@ async function loadStatus() {
   const nameEl = document.getElementById('statusPlanName');
   const subEl = document.getElementById('statusSub');
   const cta = document.getElementById('statusCta');
+  const linkBtn = document.getElementById('statusVpnLinkBtn');
+  linkBtn.style.display = 'none';
+  statusVpnLink = null;
 
-  if (active) {
+  // vpn.has_account reflects Marzban directly (live), not just "we've
+  // provisioned an order before" — a renewal extends the *same* account
+  // rather than creating a new one, so this is the only accurate source
+  // for "is it still active right now" and the real expiry date. Falls
+  // back to the old order-date estimate only if Marzban couldn't be
+  // reached at all, so a brief outage there doesn't blank the dashboard.
+  if (active && vpn.has_account && !vpn.unreachable) {
+    const plan = planById[active.plan_id];
+    const planName = plan ? plan.name : DASH_I18N.statusActivePlan;
+    if (vpn.subscription_url) {
+      statusVpnLink = vpn.subscription_url;
+      linkBtn.style.display = '';
+    }
+    if (vpn.marzban_status === 'active') {
+      nameEl.textContent = DASH_I18N.statusActive.replace('__NAME__', planName);
+      subEl.textContent = vpn.expire_at
+        ? DASH_I18N.statusActiveUntil.replace('__DATE__', new Date(vpn.expire_at).toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'}))
+        : DASH_I18N.statusActiveGeneric;
+    } else if (vpn.marzban_status === 'limited') {
+      nameEl.textContent = DASH_I18N.statusLimited.replace('__NAME__', planName);
+      subEl.textContent = DASH_I18N.statusLimitedSub;
+    } else if (vpn.marzban_status === 'disabled') {
+      nameEl.textContent = DASH_I18N.statusDisabled.replace('__NAME__', planName);
+      subEl.textContent = DASH_I18N.statusDisabledSub;
+    } else {
+      nameEl.textContent = DASH_I18N.statusExpired.replace('__NAME__', planName);
+      subEl.textContent = DASH_I18N.statusExpiredSub;
+    }
+    cta.textContent = DASH_I18N.renewPlan;
+    cta.href = '/billing';
+    cta.dataset.section = 'billing';
+  } else if (active) {
+    // Marzban unreachable right now — fall back to the order-date estimate
+    // rather than showing nothing.
     const plan = planById[active.plan_id];
     const activatedAt = new Date(active.created_at);
     const estExpiry = plan ? new Date(activatedAt.getTime() + plan.duration_days * 86400000) : null;
@@ -635,6 +692,10 @@ async function loadStatus() {
     subEl.textContent = estExpiry
       ? DASH_I18N.statusRenews.replace('__DATE__', estExpiry.toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'}))
       : DASH_I18N.statusActiveGeneric;
+    if (active.subscription_url) {
+      statusVpnLink = active.subscription_url;
+      linkBtn.style.display = '';
+    }
     cta.textContent = DASH_I18N.renewPlan;
     cta.href = '/billing';
     cta.dataset.section = 'billing';
@@ -669,6 +730,7 @@ async function loadRecentOrders() {
       <div>
         ${o.is_renewal ? DASH_I18N.renewal : DASH_I18N.newPurchase} · $${o.amount_due} · ${o.payment_method === 'card' ? DASH_I18N.card : DASH_I18N.crypto}
         ${o.status === 'pending' ? `<a class="pay-link" href="/pay/${o.id}">${DASH_I18N.payNow}</a>` : ''}
+        ${o.status === 'provisioned' && o.subscription_url ? `<button class="btn btn-ghost btn-sm" style="margin-inline-start:8px" data-link="${o.subscription_url}" onclick="copyOrderLink(this)">${DASH_I18N.copyLink}</button>` : ''}
       </div>
       ${statusBadgeDash(o.status)}
     </div>
@@ -704,7 +766,13 @@ const BILLING_I18N = {
   termsRequired: {{ t('billing_terms_required')|tojson }},
   free: {{ t('order_free')|tojson }},
   priceFree: {{ t('price_free')|tojson }},
+  copyLink: {{ t('pay_copy_link')|tojson }},
 };
+
+function copyOrderLink(btn) {
+  navigator.clipboard.writeText(btn.dataset.link);
+  showToast(DASH_I18N.vpnLinkCopied, 'success');
+}
 
 let selectedPlan = null;
 let hasAccount = false;
@@ -842,6 +910,7 @@ async function loadAllOrders() {
       <div>
         ${o.is_renewal ? BILLING_I18N.renewal : BILLING_I18N.newPurchase} · ${o.amount_due === 0 ? BILLING_I18N.priceFree : (o.payment_method === 'crypto' ? o.amount_due + ' USDT' : '$' + o.amount_due)} · ${o.payment_method === 'card' ? BILLING_I18N.card : (o.payment_method === 'crypto' ? BILLING_I18N.crypto + (o.crypto_network === 'polygon' ? ' (Polygon)' : ' (Tron)') : BILLING_I18N.free)}
         ${o.status === 'pending' ? `<a class="pay-link" href="/pay/${o.id}">${BILLING_I18N.payNow}</a>` : ''}
+        ${o.status === 'provisioned' && o.subscription_url ? `<button class="btn btn-ghost btn-sm" style="margin-inline-start:8px" data-link="${o.subscription_url}" onclick="copyOrderLink(this)">${BILLING_I18N.copyLink}</button>` : ''}
       </div>
       ${statusBadgeBilling(o.status)}
     </div>
