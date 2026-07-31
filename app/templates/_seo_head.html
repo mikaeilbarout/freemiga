@@ -5,7 +5,11 @@
      seo_description  (required, <160 chars)
      seo_image        (optional — absolute or root-relative OG image URL)
      breadcrumb_label  (optional — omit on the home page)
+     breadcrumb_parent_label/breadcrumb_parent_url (optional — adds a
+       middle breadcrumb entry, e.g. "Blog" for a post detail page)
      plans_for_schema (optional — list of Plan ORM objects, /plans only)
+     article (optional — dict with title/description/image/author/
+       published_iso/modified_iso, blog post detail pages only)
    lang_prefix/site_base_url/lang/dir/site_name all come from render(). #}
 {% set seo_image = seo_image if seo_image is defined else (site_base_url ~ "/static/img/og-default.png") %}
 {% set canonical_url = site_base_url ~ request.url.path %}
@@ -60,9 +64,27 @@
     ,{
       "@type": "BreadcrumbList",
       "itemListElement": [
-        { "@type": "ListItem", "position": 1, "name": {{ t('nav_home_breadcrumb')|tojson }}, "item": "{{ site_base_url }}{{ lang_prefix }}/" },
-        { "@type": "ListItem", "position": 2, "name": {{ breadcrumb_label|tojson }}, "item": "{{ canonical_url }}" }
+        { "@type": "ListItem", "position": 1, "name": {{ t('nav_home_breadcrumb')|tojson }}, "item": "{{ site_base_url }}{{ lang_prefix }}/" }
+        {%- if breadcrumb_parent_label is defined -%}
+        ,{ "@type": "ListItem", "position": 2, "name": {{ breadcrumb_parent_label|tojson }}, "item": "{{ site_base_url }}{{ breadcrumb_parent_url }}" }
+        ,{ "@type": "ListItem", "position": 3, "name": {{ breadcrumb_label|tojson }}, "item": "{{ canonical_url }}" }
+        {%- else -%}
+        ,{ "@type": "ListItem", "position": 2, "name": {{ breadcrumb_label|tojson }}, "item": "{{ canonical_url }}" }
+        {%- endif %}
       ]
+    }
+    {%- endif %}
+    {%- if article is defined %}
+    ,{
+      "@type": "Article",
+      "headline": {{ article.title|tojson }},
+      "description": {{ article.description|tojson }},
+      "image": "{{ article.image }}",
+      "author": { "@type": "Organization", "name": {{ article.author|tojson }} },
+      "publisher": { "@id": "{{ site_base_url }}/#organization" },
+      "datePublished": "{{ article.published_iso }}",
+      "dateModified": "{{ article.modified_iso }}",
+      "mainEntityOfPage": { "@type": "WebPage", "@id": "{{ canonical_url }}" }
     }
     {%- endif %}
     {%- if plans_for_schema is defined %}

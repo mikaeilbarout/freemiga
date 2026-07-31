@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ post.title }} — {{ site_name }}</title>
+{% include "_fonts.html" %}
+{% set seo_title = post.title %}
+{% set seo_description = post.excerpt %}
+{% if post.og_image %}{% set seo_image = site_base_url ~ post.og_image %}{% endif %}
+{% set breadcrumb_parent_label = t('nav_blog') %}
+{% set breadcrumb_parent_url = lang_prefix ~ "/blog" %}
+{% set breadcrumb_label = post.title %}
+{% set article = {
+  "title": post.title,
+  "description": post.excerpt,
+  "image": (site_base_url ~ (post.og_image or post.featured_image)) if (post.og_image or post.featured_image) else (site_base_url ~ "/static/img/og-default.png"),
+  "author": post.author or site_name,
+  "published_iso": post.published_iso,
+  "modified_iso": post.modified_iso,
+} %}
+{% include "_seo_head.html" %}
+<style>
+  .blog-article-wrap { max-width: 760px; margin: 0 auto; }
+  .blog-back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text-faint); font-size: 13px; margin-bottom: 22px; }
+  .blog-back-link:hover { color: var(--text-dim); }
+  .blog-article-header { margin-bottom: 26px; }
+  .blog-article-header .blog-card-category { margin-bottom: 12px; }
+  .blog-article-header h1 { font-family: var(--font-display); font-size: 32px; line-height: 1.3; margin: 0 0 14px; }
+  .blog-article-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--text-faint); font-size: 13px; }
+  .blog-featured-image { width: 100%; border-radius: var(--radius); margin-bottom: 28px; aspect-ratio: 16/9; object-fit: cover; }
+  #blogToc { margin-bottom: 28px; }
+  #blogToc summary { cursor: pointer; font-weight: 600; font-size: 13.5px; padding: 14px 18px; }
+  #blogToc ul { list-style: none; margin: 0; padding: 0 18px 16px; display: flex; flex-direction: column; gap: 8px; }
+  #blogToc a { font-size: 13px; color: var(--text-dim); }
+  #blogToc a:hover { color: var(--accent-2); }
+  .blog-content { font-size: 15px; line-height: 1.85; color: var(--text-dim); }
+  .blog-content h2 { font-family: var(--font-display); font-size: 22px; color: var(--text); margin: 32px 0 14px; scroll-margin-top: 24px; }
+  .blog-content h3 { font-family: var(--font-display); font-size: 18px; color: var(--text); margin: 26px 0 12px; scroll-margin-top: 24px; }
+  .blog-content p { margin: 0 0 16px; }
+  .blog-content ul, .blog-content ol { margin: 0 0 16px; padding-inline-start: 22px; }
+  .blog-content li { margin-bottom: 6px; }
+  .blog-content a { color: var(--accent-2); text-decoration: underline; }
+  .blog-content img { max-width: 100%; border-radius: var(--radius-sm); margin: 16px 0; }
+  .blog-content blockquote { border-inline-start: 3px solid var(--accent); margin: 20px 0; padding: 4px 20px; color: var(--text-dim); font-style: italic; }
+  .blog-content code { background: var(--panel); padding: 2px 6px; border-radius: 6px; font-size: 13px; }
+  .blog-tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 28px 0; }
+  .blog-tag { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--text-dim); }
+  .blog-explore { margin-top: 12px; }
+  .blog-explore h2 { font-family: var(--font-display); font-size: 16px; margin: 0 0 12px; }
+  .blog-explore-links { display: flex; flex-wrap: wrap; gap: 10px; }
+  .blog-related { max-width: 1100px; margin: 56px auto 0; }
+  .blog-related h2 { font-family: var(--font-display); font-size: 18px; text-align: center; margin-bottom: 24px; }
+</style>
+</head>
+<body>
+
+{% include "_nav.html" %}
+
+<main>
+
+<section class="section">
+  <div class="blog-article-wrap">
+    <a class="blog-back-link" href="{{ lang_prefix }}/blog">{{ '→' if dir == 'rtl' else '←' }} {{ t('blog_back_to_blog') }}</a>
+
+    <header class="blog-article-header">
+      {% if post.category_name %}<span class="blog-card-category">{{ post.category_name }}</span>{% endif %}
+      <h1>{{ post.title }}</h1>
+      <div class="blog-article-meta">
+        {% if post.author %}<span>{{ t('blog_by_author', author=post.author) }}</span>{% endif %}
+        <span>{{ t('blog_published_on', date=post.published_display) }}</span>
+        <span>{{ t('blog_reading_time', n=post.reading_time_min) }}</span>
+      </div>
+    </header>
+
+    {% if post.featured_image %}
+    <img class="blog-featured-image" src="{{ post.featured_image }}" alt="{{ post.title }}" fetchpriority="high" decoding="async" width="1200" height="675">
+    {% endif %}
+
+    <details class="card" id="blogToc" style="display:none">
+      <summary>{{ t('blog_toc_title') }}</summary>
+      <ul id="blogTocList"></ul>
+    </details>
+
+    <div class="blog-content" id="blogContent">{{ post.content|safe }}</div>
+
+    {% if post.tags %}
+    <div class="blog-tags">
+      {% for tag in post.tags %}<span class="blog-tag">#{{ tag }}</span>{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="card blog-explore">
+      <h2>{{ t('blog_explore_title') }}</h2>
+      <div class="blog-explore-links">
+        <a class="btn btn-ghost btn-sm" href="{{ lang_prefix }}/plans">{{ t('blog_explore_plans') }}</a>
+      </div>
+    </div>
+  </div>
+
+  {% if related_posts %}
+  <div class="blog-related">
+    <h2>{{ t('blog_related_title') }}</h2>
+    <div class="blog-grid">
+      {% for rp in related_posts %}
+      <article class="card blog-card">
+        {% if rp.featured_image %}
+        <img class="blog-card-img" src="{{ rp.featured_image }}" alt="{{ rp.title }}" loading="lazy" decoding="async" width="640" height="360">
+        {% endif %}
+        <div class="blog-card-body">
+          <div class="blog-card-meta"><span>{{ t('blog_reading_time', n=rp.reading_time_min) }}</span></div>
+          <h2><a href="{{ lang_prefix }}/blog/{{ rp.slug }}">{{ rp.title }}</a></h2>
+          <p>{{ rp.excerpt }}</p>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</section>
+
+</main>
+
+{% include "_footer.html" %}
+
+<script>
+(function () {
+  const content = document.getElementById('blogContent');
+  const headings = content.querySelectorAll('h2, h3');
+  if (!headings.length) return;
+  const list = document.getElementById('blogTocList');
+  const seen = new Set();
+  headings.forEach((h, i) => {
+    if (!h.id) {
+      let base = h.textContent.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || ('section-' + i);
+      let id = base, n = 2;
+      while (seen.has(id) || document.getElementById(id)) { id = base + '-' + n; n++; }
+      h.id = id;
+    }
+    seen.add(h.id);
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = '#' + h.id;
+    a.textContent = h.textContent;
+    if (h.tagName === 'H3') a.style.paddingInlineStart = '14px';
+    li.appendChild(a);
+    list.appendChild(li);
+  });
+  document.getElementById('blogToc').style.display = '';
+})();
+</script>
+</body>
+</html>

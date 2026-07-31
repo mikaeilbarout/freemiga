@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy.orm import selectinload
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -17,8 +18,8 @@ from app.config import settings
 from app.database import Base, engine, SessionLocal
 from app.lang import LANG_COOKIE, SUPPORTED_LANGUAGES, resolve_lang
 from app.limiter import limiter
-from app.models import Customer, Plan
-from app.routers import admin, auth, banners, integrations, orders, payments, plans, support
+from app.models import BlogPost, BlogPostStatus, Customer, Plan
+from app.routers import admin, auth, banners, blog_admin, integrations, orders, payments, plans, support
 from app.services.minify import build_minified_assets
 from app.services.telegram import telegram_link_loop
 
@@ -216,6 +217,7 @@ app.include_router(support.router)
 app.include_router(admin.router)
 app.include_router(banners.router)
 app.include_router(banners.admin_router)
+app.include_router(blog_admin.router)
 app.include_router(integrations.router)
 
 
@@ -266,6 +268,7 @@ SITEMAP_PAGES = [
     ("features", "monthly", "0.7"),
     ("guide", "monthly", "0.6"),
     ("terms", "yearly", "0.3"),
+    ("blog", "weekly", "0.7"),
 ]
 
 
@@ -306,6 +309,27 @@ def sitemap_xml():
     <changefreq>{changefreq}</changefreq>
     <priority>{priority}</priority>
   </url>""")
+
+    db = SessionLocal()
+    try:
+        posts = db.query(BlogPost).filter(BlogPost.status == BlogPostStatus.published).all()
+        for p in posts:
+            en_url = f"{site}/en/blog/{p.slug}"
+            fa_url = f"{site}/fa/blog/{p.slug}"
+            lastmod = p.updated_at.strftime("%Y-%m-%d")
+            for loc in (en_url, fa_url):
+                entries.append(f"""  <url>
+    <loc>{loc}</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="{en_url}"/>
+    <xhtml:link rel="alternate" hreflang="fa" href="{fa_url}"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="{en_url}"/>
+    <lastmod>{lastmod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>""")
+    finally:
+        db.close()
+
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
@@ -389,6 +413,79 @@ def terms_page_localized(request: Request, lang: str):
     return _localized(request, lang, "terms.html", updated_at="July 30, 2026")
 
 
+BLOG_PAGE_SIZE = 9
+
+
+def _blog_post_view(post: BlogPost, lang: str) -> dict:
+    is_fa = lang == "fa"
+    return {
+        "slug": post.slug,
+        "title": post.title_fa if is_fa else post.title_en,
+        "excerpt": post.excerpt_fa if is_fa else post.excerpt_en,
+        "content": post.content_fa if is_fa else post.content_en,
+        "featured_image": post.featured_image,
+        "og_image": post.og_image,
+        "author": post.author,
+        "category_name": (post.category.name_fa if is_fa else post.category.name_en) if post.category else None,
+        "tags": [t.name_fa if is_fa else t.name_en for t in post.tags],
+        "reading_time_min": post.reading_time_min,
+        "published_display": post.published_at.strftime("%B %d, %Y") if post.published_at else "",
+        "published_iso": (post.published_at or post.created_at).isoformat() + "Z",
+        "modified_iso": post.updated_at.isoformat() + "Z",
+    }
+
+
+@app.get("/{lang}/blog", response_class=HTMLResponse)
+def blog_list_localized(request: Request, lang: str, page: int = 1):
+    if lang not in SUPPORTED_LANGUAGES:
+        raise StarletteHTTPException(404)
+    page = max(1, page)
+    db = SessionLocal()
+    try:
+        query = (
+            db.query(BlogPost)
+            .options(selectinload(BlogPost.category))
+            .filter(BlogPost.status == BlogPostStatus.published)
+            .order_by(BlogPost.published_at.desc())
+        )
+        total = query.count()
+        rows = query.offset((page - 1) * BLOG_PAGE_SIZE).limit(BLOG_PAGE_SIZE).all()
+        posts = [_blog_post_view(p, lang) for p in rows]
+    finally:
+        db.close()
+    total_pages = max(1, -(-total // BLOG_PAGE_SIZE))
+    return _localized(request, lang, "blog_list.html", posts=posts, page=page, total_pages=total_pages)
+
+
+@app.get("/{lang}/blog/{slug}", response_class=HTMLResponse)
+def blog_detail_localized(request: Request, lang: str, slug: str):
+    if lang not in SUPPORTED_LANGUAGES:
+        raise StarletteHTTPException(404)
+    db = SessionLocal()
+    try:
+        post = (
+            db.query(BlogPost)
+            .options(selectinload(BlogPost.category), selectinload(BlogPost.tags))
+            .filter(BlogPost.slug == slug, BlogPost.status == BlogPostStatus.published)
+            .first()
+        )
+        if not post:
+            raise StarletteHTTPException(404)
+        related_query = db.query(BlogPost).options(selectinload(BlogPost.category)).filter(
+            BlogPost.status == BlogPostStatus.published, BlogPost.id != post.id
+        )
+        if post.category_id:
+            related_query = related_query.filter(BlogPost.category_id == post.category_id)
+        related_rows = related_query.order_by(BlogPost.published_at.desc()).limit(3).all()
+        related_posts = [_blog_post_view(p, lang) for p in related_rows]
+        post_view = _blog_post_view(post, lang)
+    finally:
+        db.close()
+    return _localized(
+        request, lang, "blog_detail.html", post=post_view, related_posts=related_posts
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     # Root is the one URL where visitor-preferred-language detection still
@@ -464,6 +561,16 @@ def terms_page(request: Request):
 @app.get("/guide", response_class=HTMLResponse)
 def guide_page(request: Request):
     return _redirect_to_localized(request, "/guide", 301)
+
+
+@app.get("/blog", response_class=HTMLResponse)
+def blog_page(request: Request):
+    return _redirect_to_localized(request, "/blog", 301)
+
+
+@app.get("/blog/{slug}", response_class=HTMLResponse)
+def blog_post_page(request: Request, slug: str):
+    return _redirect_to_localized(request, f"/blog/{slug}", 301)
 
 
 @app.get("/admin", response_class=HTMLResponse)

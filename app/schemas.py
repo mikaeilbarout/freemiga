@@ -278,3 +278,49 @@ class MarzbanGuardStatusIn(BaseModel):
     username: str
     banned: bool
     reason: str = ""
+
+
+# ---- Blog ----
+
+class BlogCategoryOut(BaseModel):
+    id: str
+    slug: str
+    name_en: str
+    name_fa: str
+
+    class Config:
+        from_attributes = True
+
+
+class BlogTagOut(BaseModel):
+    id: str
+    slug: str
+    name_en: str
+    name_fa: str
+
+    class Config:
+        from_attributes = True
+
+
+class BlogPostAdminOut(BaseModel):
+    id: str
+    slug: str
+    category: Optional[BlogCategoryOut] = None
+    title_en: str
+    title_fa: str
+    excerpt_en: str
+    excerpt_fa: str
+    content_en: str
+    content_fa: str
+    featured_image: Optional[str] = None
+    og_image: Optional[str] = None
+    author: Optional[str] = None
+    status: str
+    published_at: Optional[datetime] = None
+    updated_at: datetime
+    created_at: datetime
+    reading_time_min: int
+    tags: list[BlogTagOut] = []
+
+    class Config:
+        from_attributes = True

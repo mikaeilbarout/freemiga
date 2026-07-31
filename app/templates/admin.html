@@ -84,6 +84,7 @@
       <div class="tab" data-tab="tickets" role="tab" tabindex="0" aria-selected="false">Support</div>
       <div class="tab" data-tab="plans" role="tab" tabindex="0" aria-selected="false">Plans</div>
       <div class="tab" data-tab="banners" role="tab" tabindex="0" aria-selected="false">Banners</div>
+      <div class="tab" data-tab="blog" role="tab" tabindex="0" aria-selected="false">Blog</div>
       <div class="tab" data-tab="auditlog" role="tab" tabindex="0" aria-selected="false">Activity log</div>
     </div>
     <div id="customers">
@@ -144,6 +145,7 @@
 
     <div id="plans" style="display:none"></div>
     <div id="banners" style="display:none"></div>
+    <div id="blog" style="display:none"></div>
 
     <div id="auditlog" style="display:none">
       <div class="list-toolbar">
@@ -180,7 +182,7 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
   document.querySelectorAll('.tab').forEach(x => { x.classList.remove('active'); x.setAttribute('aria-selected', 'false'); });
   t.classList.add('active');
   t.setAttribute('aria-selected', 'true');
-  ['customers','orders','tickets','plans','banners','auditlog'].forEach(id => {
+  ['customers','orders','tickets','plans','banners','blog','auditlog'].forEach(id => {
     document.getElementById(id).style.display = id === t.dataset.tab ? 'block' : 'none';
   });
 }));
@@ -200,7 +202,7 @@ async function adminLogin() {
   }
   document.getElementById('loginCard').style.display = 'none';
   document.getElementById('panel').style.display = 'block';
-  loadCustomers(); loadOrders(); loadTickets(); loadAuditLog(); loadPlans(); loadBanners();
+  loadCustomers(); loadOrders(); loadTickets(); loadAuditLog(); loadPlans(); loadBanners(); loadBlog();
 }
 
 const ADMIN_PAGE_SIZE = 10;
@@ -565,6 +567,277 @@ async function deleteBanner(id) {
   if (!confirm('Delete this banner permanently?')) return;
   await fetch(`/api/admin/banners/${id}`, {method: 'DELETE'});
   loadBanners();
+}
+
+// ---- Blog ----
+
+let blogPage = 1, blogSearchTimer = null;
+let blogCategories = [], blogTags = [];
+
+async function loadBlogTaxonomies() {
+  const [catsRes, tagsRes] = await Promise.all([
+    fetch('/api/admin/blog/categories'), fetch('/api/admin/blog/tags'),
+  ]);
+  blogCategories = catsRes.ok ? await catsRes.json() : [];
+  blogTags = tagsRes.ok ? await tagsRes.json() : [];
+}
+
+function blogCategoryOptions(selectedId) {
+  return `<option value="">No category</option>` + blogCategories.map(c =>
+    `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${escapeHtml(c.name_en)}</option>`
+  ).join('');
+}
+
+function blogTagCheckboxes(idPrefix, selectedIds) {
+  if (!blogTags.length) return '<span class="faint" style="font-size:12.5px">No tags yet — add one above.</span>';
+  return blogTags.map(t => `
+    <label style="display:inline-flex;align-items:center;gap:5px;margin-inline-end:12px;font-size:12.5px;color:var(--text-dim)">
+      <input type="checkbox" value="${t.id}" id="${idPrefix}-tag-${t.id}" style="width:auto;margin:0" ${selectedIds.includes(t.id) ? 'checked' : ''}> ${escapeHtml(t.name_en)}
+    </label>
+  `).join('');
+}
+
+function collectCheckedTagIds(idPrefix) {
+  return blogTags.filter(t => document.getElementById(`${idPrefix}-tag-${t.id}`)?.checked).map(t => t.id).join(',');
+}
+
+function blogPostRowHtml(p) {
+  const statusBadge = p.status === 'published'
+    ? '<span class="badge badge-success">Published</span>'
+    : '<span class="badge badge-neutral">Draft</span>';
+  return `
+    <div class="card row-card">
+      <div class="row-top">
+        <div class="name">${escapeHtml(p.title_en)}</div>
+        ${statusBadge}
+      </div>
+      <div class="row-meta">${p.category ? escapeHtml(p.category.name_en) + ' · ' : ''}${p.reading_time_min} min read · /blog/${p.slug}</div>
+      <div class="actions">
+        <button class="btn btn-ghost btn-sm" onclick="toggleEditBlogPost('${p.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteBlogPost('${p.id}')">Delete</button>
+      </div>
+      <div class="new-plan-card" id="editBlogPost-${p.id}" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid var(--border, #333)">
+        <label>Title (English)</label>
+        <textarea id="editBlogTitleEn-${p.id}" rows="1">${escapeHtml(p.title_en)}</textarea>
+        <label>Title (Persian)</label>
+        <textarea id="editBlogTitleFa-${p.id}" rows="1" dir="rtl">${escapeHtml(p.title_fa)}</textarea>
+        <label>Excerpt (English) — also the meta description</label>
+        <textarea id="editBlogExcerptEn-${p.id}" rows="2">${escapeHtml(p.excerpt_en)}</textarea>
+        <label>Excerpt (Persian)</label>
+        <textarea id="editBlogExcerptFa-${p.id}" rows="2" dir="rtl">${escapeHtml(p.excerpt_fa)}</textarea>
+        <label>Content (English, HTML)</label>
+        <textarea id="editBlogContentEn-${p.id}" rows="8" style="font-family:monospace;font-size:12px">${escapeHtml(p.content_en)}</textarea>
+        <label>Content (Persian, HTML)</label>
+        <textarea id="editBlogContentFa-${p.id}" rows="8" style="font-family:monospace;font-size:12px" dir="rtl">${escapeHtml(p.content_fa)}</textarea>
+        <label>Author</label>
+        <input id="editBlogAuthor-${p.id}" value="" placeholder="${p.author ? '' : 'Freemiga Team'}">
+        <label>Category</label>
+        <select id="editBlogCategory-${p.id}">${blogCategoryOptions(p.category ? p.category.id : null)}</select>
+        <label style="margin-top:8px">Tags</label>
+        <div style="margin-bottom:8px">${blogTagCheckboxes('editBlogPost-' + p.id, p.tags.map(t => t.id))}</div>
+        <label>Status</label>
+        <select id="editBlogStatus-${p.id}">
+          <option value="draft" ${p.status === 'draft' ? 'selected' : ''}>Draft</option>
+          <option value="published" ${p.status === 'published' ? 'selected' : ''}>Published</option>
+        </select>
+        <label style="margin-top:8px">Featured image (optional — leave blank to keep current)</label>
+        <input id="editBlogFeaturedImage-${p.id}" type="file" accept="image/*">
+        <label>OG image (optional — falls back to featured image)</label>
+        <input id="editBlogOgImage-${p.id}" type="file" accept="image/*">
+        <div style="margin-top:12px">
+          <button class="btn btn-primary btn-sm" onclick="saveBlogPost('${p.id}')">Save changes</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleEditBlogPost('${p.id}')">Cancel</button>
+        </div>
+        <div class="field-err" id="editBlogPostErr-${p.id}"></div>
+      </div>
+    </div>
+  `;
+}
+
+function toggleEditBlogPost(id) {
+  const el = document.getElementById(`editBlogPost-${id}`);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function loadBlog(reset = true) {
+  if (reset) blogPage = 1;
+  await loadBlogTaxonomies();
+  const search = document.getElementById('blogSearch')?.value.trim() || '';
+  const params = new URLSearchParams({page: blogPage, page_size: ADMIN_PAGE_SIZE, q: search});
+  const res = await fetch(`/api/admin/blog/posts?${params}`);
+  if (!res.ok) return;
+  const data = await res.json();
+
+  document.getElementById('blog').innerHTML = `
+    <div class="card row-card new-plan-card">
+      <div class="name" style="margin-bottom:12px">Categories</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        ${blogCategories.map(c => `<span class="badge badge-neutral">${escapeHtml(c.name_en)} <a href="#" onclick="deleteBlogCategory('${c.id}');return false" style="margin-inline-start:6px;color:var(--danger)">✕</a></span>`).join('') || '<span class="faint" style="font-size:12.5px">No categories yet.</span>'}
+      </div>
+      <input id="newCatNameEn" placeholder="Category name (English)">
+      <input id="newCatNameFa" placeholder="Category name (Persian)" dir="rtl">
+      <button class="btn btn-ghost btn-sm" onclick="createBlogCategory()">Add category</button>
+    </div>
+
+    <div class="card row-card new-plan-card">
+      <div class="name" style="margin-bottom:12px">Tags</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        ${blogTags.map(t => `<span class="badge badge-neutral">${escapeHtml(t.name_en)} <a href="#" onclick="deleteBlogTag('${t.id}');return false" style="margin-inline-start:6px;color:var(--danger)">✕</a></span>`).join('') || '<span class="faint" style="font-size:12.5px">No tags yet.</span>'}
+      </div>
+      <input id="newTagNameEn" placeholder="Tag name (English)">
+      <input id="newTagNameFa" placeholder="Tag name (Persian)" dir="rtl">
+      <button class="btn btn-ghost btn-sm" onclick="createBlogTag()">Add tag</button>
+    </div>
+
+    <div class="card row-card new-plan-card">
+      <div class="name" style="margin-bottom:12px">Write new post</div>
+      <label>Title (English)</label>
+      <textarea id="newBlogTitleEn" rows="1"></textarea>
+      <label>Title (Persian)</label>
+      <textarea id="newBlogTitleFa" rows="1" dir="rtl"></textarea>
+      <label>Excerpt (English) — also the meta description</label>
+      <textarea id="newBlogExcerptEn" rows="2"></textarea>
+      <label>Excerpt (Persian)</label>
+      <textarea id="newBlogExcerptFa" rows="2" dir="rtl"></textarea>
+      <label>Content (English, HTML — use &lt;h2&gt;/&lt;h3&gt; for section headings, they build the table of contents automatically)</label>
+      <textarea id="newBlogContentEn" rows="8" style="font-family:monospace;font-size:12px"></textarea>
+      <label>Content (Persian, HTML)</label>
+      <textarea id="newBlogContentFa" rows="8" style="font-family:monospace;font-size:12px" dir="rtl"></textarea>
+      <label>Author</label>
+      <input id="newBlogAuthor" placeholder="Freemiga Team">
+      <label>Category</label>
+      <select id="newBlogCategory">${blogCategoryOptions(null)}</select>
+      <label style="margin-top:8px">Tags</label>
+      <div style="margin-bottom:8px">${blogTagCheckboxes('newBlogPost', [])}</div>
+      <label>Status</label>
+      <select id="newBlogStatus">
+        <option value="draft">Draft</option>
+        <option value="published">Published</option>
+      </select>
+      <label style="margin-top:8px">Featured image</label>
+      <input id="newBlogFeaturedImage" type="file" accept="image/*">
+      <label>OG image (optional — falls back to featured image)</label>
+      <input id="newBlogOgImage" type="file" accept="image/*">
+      <div style="margin-top:12px">
+        <button class="btn btn-primary btn-sm" onclick="createBlogPost()">Create post</button>
+      </div>
+      <div class="field-err" id="newBlogPostErr"></div>
+    </div>
+
+    <div class="list-toolbar">
+      <input type="text" id="blogSearch" placeholder="Search post titles…" value="${escapeHtml(search)}">
+      <span class="list-count">${data.total} total</span>
+    </div>
+    ${data.items.map(blogPostRowHtml).join('') || '<div class="empty-state">No posts yet</div>'}
+    <div class="load-more-row" style="display:${data.total > ADMIN_PAGE_SIZE ? 'block' : 'none'}">
+      <div style="display:flex;align-items:center;justify-content:center;gap:14px">
+        <button class="btn btn-ghost btn-sm" ${blogPage <= 1 ? 'disabled' : ''} onclick="changeBlogPage(-1)">← Prev</button>
+        <span style="font-size:12.5px;color:var(--text-dim)">Page ${blogPage} of ${Math.max(1, Math.ceil(data.total / ADMIN_PAGE_SIZE))}</span>
+        <button class="btn btn-ghost btn-sm" ${blogPage >= Math.ceil(data.total / ADMIN_PAGE_SIZE) ? 'disabled' : ''} onclick="changeBlogPage(1)">Next →</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('blogSearch').addEventListener('input', () => {
+    clearTimeout(blogSearchTimer);
+    blogSearchTimer = setTimeout(() => loadBlog(true), 350);
+  });
+}
+
+function changeBlogPage(delta) { blogPage += delta; loadBlog(false); }
+
+async function createBlogCategory() {
+  const name_en = document.getElementById('newCatNameEn').value.trim();
+  const name_fa = document.getElementById('newCatNameFa').value.trim();
+  if (!name_en || !name_fa) { showToast('Category name is required in both languages.', 'error'); return; }
+  const form = new FormData();
+  form.append('name_en', name_en); form.append('name_fa', name_fa);
+  const res = await fetch('/api/admin/blog/categories', {method: 'POST', body: form});
+  if (res.ok) loadBlog(false); else showToast('Could not create category.', 'error');
+}
+
+async function deleteBlogCategory(id) {
+  if (!confirm('Delete this category? Posts using it will become uncategorized.')) return;
+  await fetch(`/api/admin/blog/categories/${id}`, {method: 'DELETE'});
+  loadBlog(false);
+}
+
+async function createBlogTag() {
+  const name_en = document.getElementById('newTagNameEn').value.trim();
+  const name_fa = document.getElementById('newTagNameFa').value.trim();
+  if (!name_en || !name_fa) { showToast('Tag name is required in both languages.', 'error'); return; }
+  const form = new FormData();
+  form.append('name_en', name_en); form.append('name_fa', name_fa);
+  const res = await fetch('/api/admin/blog/tags', {method: 'POST', body: form});
+  if (res.ok) loadBlog(false); else showToast('Could not create tag.', 'error');
+}
+
+async function deleteBlogTag(id) {
+  if (!confirm('Delete this tag?')) return;
+  await fetch(`/api/admin/blog/tags/${id}`, {method: 'DELETE'});
+  loadBlog(false);
+}
+
+async function createBlogPost() {
+  const err = document.getElementById('newBlogPostErr');
+  err.textContent = '';
+  const titleEn = document.getElementById('newBlogTitleEn').value.trim();
+  const titleFa = document.getElementById('newBlogTitleFa').value.trim();
+  const excerptEn = document.getElementById('newBlogExcerptEn').value.trim();
+  const excerptFa = document.getElementById('newBlogExcerptFa').value.trim();
+  const contentEn = document.getElementById('newBlogContentEn').value.trim();
+  const contentFa = document.getElementById('newBlogContentFa').value.trim();
+  if (!titleEn || !titleFa || !excerptEn || !excerptFa || !contentEn || !contentFa) {
+    err.textContent = 'Title, excerpt, and content are required in both languages.';
+    return;
+  }
+  const form = new FormData();
+  form.append('title_en', titleEn); form.append('title_fa', titleFa);
+  form.append('excerpt_en', excerptEn); form.append('excerpt_fa', excerptFa);
+  form.append('content_en', contentEn); form.append('content_fa', contentFa);
+  form.append('author', document.getElementById('newBlogAuthor').value.trim());
+  form.append('category_id', document.getElementById('newBlogCategory').value);
+  form.append('status', document.getElementById('newBlogStatus').value);
+  form.append('tag_ids', collectCheckedTagIds('newBlogPost'));
+  const featuredImage = document.getElementById('newBlogFeaturedImage').files[0];
+  if (featuredImage) form.append('featured_image', featuredImage);
+  const ogImage = document.getElementById('newBlogOgImage').files[0];
+  if (ogImage) form.append('og_image', ogImage);
+
+  const res = await fetch('/api/admin/blog/posts', {method: 'POST', body: form});
+  if (!res.ok) { err.textContent = 'Could not create post — please check every field.'; return; }
+  loadBlog(true);
+}
+
+async function saveBlogPost(id) {
+  const err = document.getElementById(`editBlogPostErr-${id}`);
+  err.textContent = '';
+  const form = new FormData();
+  form.append('title_en', document.getElementById(`editBlogTitleEn-${id}`).value.trim());
+  form.append('title_fa', document.getElementById(`editBlogTitleFa-${id}`).value.trim());
+  form.append('excerpt_en', document.getElementById(`editBlogExcerptEn-${id}`).value.trim());
+  form.append('excerpt_fa', document.getElementById(`editBlogExcerptFa-${id}`).value.trim());
+  form.append('content_en', document.getElementById(`editBlogContentEn-${id}`).value.trim());
+  form.append('content_fa', document.getElementById(`editBlogContentFa-${id}`).value.trim());
+  const author = document.getElementById(`editBlogAuthor-${id}`).value.trim();
+  if (author) form.append('author', author);
+  form.append('category_id', document.getElementById(`editBlogCategory-${id}`).value);
+  form.append('status', document.getElementById(`editBlogStatus-${id}`).value);
+  form.append('tag_ids', collectCheckedTagIds('editBlogPost-' + id));
+  const featuredImage = document.getElementById(`editBlogFeaturedImage-${id}`).files[0];
+  if (featuredImage) form.append('featured_image', featuredImage);
+  const ogImage = document.getElementById(`editBlogOgImage-${id}`).files[0];
+  if (ogImage) form.append('og_image', ogImage);
+
+  const res = await fetch(`/api/admin/blog/posts/${id}`, {method: 'PUT', body: form});
+  if (!res.ok) { err.textContent = 'Could not save changes.'; return; }
+  loadBlog(false);
+}
+
+async function deleteBlogPost(id) {
+  if (!confirm('Delete this post permanently?')) return;
+  await fetch(`/api/admin/blog/posts/${id}`, {method: 'DELETE'});
+  loadBlog(false);
 }
 
 async function createPlan() {

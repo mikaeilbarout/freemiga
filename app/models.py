@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, String, Float, Integer, DateTime, Enum, ForeignKey, Boolean, Text
+from sqlalchemy import Column, String, Float, Integer, DateTime, Enum, ForeignKey, Boolean, Text, Table
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -189,6 +189,74 @@ class Banner(Base):
     sort_order = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class BlogCategory(Base):
+    __tablename__ = "blog_categories"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    slug = Column(String, unique=True, nullable=False)
+    name_en = Column(String, nullable=False)
+    name_fa = Column(String, nullable=False)
+
+    posts = relationship("BlogPost", back_populates="category")
+
+
+class BlogTag(Base):
+    __tablename__ = "blog_tags"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    slug = Column(String, unique=True, nullable=False)
+    name_en = Column(String, nullable=False)
+    name_fa = Column(String, nullable=False)
+
+
+blog_post_tags = Table(
+    "blog_post_tags",
+    Base.metadata,
+    Column("post_id", String, ForeignKey("blog_posts.id"), primary_key=True),
+    Column("tag_id", String, ForeignKey("blog_tags.id"), primary_key=True),
+)
+
+
+class BlogPostStatus(str, enum.Enum):
+    draft = "draft"
+    published = "published"
+
+
+class BlogPost(Base):
+    __tablename__ = "blog_posts"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    # One slug per post, shared across /en/blog/{slug} and /fa/blog/{slug} —
+    # same convention as the marketing pages (same path, language via prefix)
+    # so canonical/hreflang alternates stay a straight prefix swap.
+    slug = Column(String, unique=True, nullable=False)
+    category_id = Column(String, ForeignKey("blog_categories.id"), nullable=True)
+
+    title_en = Column(String, nullable=False)
+    title_fa = Column(String, nullable=False)
+    excerpt_en = Column(String, nullable=False)  # also used as the meta description
+    excerpt_fa = Column(String, nullable=False)
+    content_en = Column(Text, nullable=False)  # HTML body
+    content_fa = Column(Text, nullable=False)
+
+    featured_image = Column(String, nullable=True)  # /static/uploads/blog/...
+    og_image = Column(String, nullable=True)  # falls back to featured_image if unset
+    author = Column(String, nullable=True)  # falls back to settings.SITE_NAME if unset
+
+    status = Column(Enum(BlogPostStatus), default=BlogPostStatus.draft, nullable=False)
+    published_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Recomputed from content_en's word count on every save — see
+    # app/services/blog.py:reading_time_minutes(). Approximate by design;
+    # storing it avoids recomputing on every list-page render.
+    reading_time_min = Column(Integer, default=1, nullable=False)
+
+    category = relationship("BlogCategory", back_populates="posts")
+    tags = relationship("BlogTag", secondary=blog_post_tags)
 
 
 class AdminAuditLog(Base):
