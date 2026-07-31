@@ -600,7 +600,7 @@ async function loadMeDashboard() {
   if (me.is_banned) {
     const ban = document.getElementById('banNoticeOverview');
     ban.style.display = 'block';
-    ban.innerHTML = DASH_I18N.banMessage.replace('__REASON__', me.ban_reason || DASH_I18N.banUnspecified);
+    ban.innerHTML = DASH_I18N.banMessage.replace('__REASON__', escapeHtml(me.ban_reason || DASH_I18N.banUnspecified));
   }
 }
 
@@ -724,7 +724,7 @@ async function loadMeBilling() {
   if (me.is_banned) {
     const ban = document.getElementById('banNoticeBilling');
     ban.style.display = 'block';
-    ban.innerHTML = BILLING_I18N.banMessage.replace('__REASON__', me.ban_reason || BILLING_I18N.banUnspecified);
+    ban.innerHTML = BILLING_I18N.banMessage.replace('__REASON__', escapeHtml(me.ban_reason || BILLING_I18N.banUnspecified));
     document.getElementById('buyCardBtn').disabled = true;
     document.getElementById('cryptoToggleBtn').disabled = true;
     document.getElementById('claimFreeBtn').disabled = true;
@@ -1088,10 +1088,14 @@ const SUPPORT_I18N = {
   sendError: {{ t('support_send_error')|tojson }},
 };
 
+// Safe for text-node AND quoted-attribute-value context (unlike a bare
+// textContent->innerHTML round trip, which leaves " and ' untouched since
+// browsers don't need to escape them in plain text — but this codebase
+// interpolates the result into attributes like placeholder="..." too).
 function escapeHtml(s) {
-  const div = document.createElement('div');
-  div.textContent = s == null ? '' : String(s);
-  return div.innerHTML;
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+    {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]
+  ));
 }
 
 async function extractErrorDetail(res, fallback) {

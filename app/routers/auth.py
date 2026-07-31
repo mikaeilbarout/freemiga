@@ -214,7 +214,11 @@ async def request_reset(payload: RequestResetIn, request: Request, db: Session =
         "message": i18n.t(lang, "reset_generic_message"),
     }
 
-    if not customer:
+    # Same response as "no such user" when there's nowhere to actually send
+    # a code (an old account with no email on file and no Telegram link) —
+    # both keeps this endpoint from leaking which usernames exist, and stops
+    # it from claiming "sent" when nothing could ever be delivered.
+    if not customer or not (customer.email or customer.telegram_chat_id):
         return generic_response
 
     code = f"{random.randint(0, 999999):06d}"

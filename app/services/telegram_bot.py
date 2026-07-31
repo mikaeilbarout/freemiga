@@ -70,6 +70,8 @@ TEXT = {
         "checkout_ready": "Please tap below to complete your ${price} payment for {plan_name}. "
         "This page updates automatically, and we'll let you know here as soon as it's confirmed.",
         "pay_now": "Pay now →",
+        "free_plan_claimed": "✅ Your free trial ({plan_name}) has been activated!",
+        "free_plan_already_used": "You've already used your free trial — please choose a paid plan to continue.",
         "banned": "⚠️ Your account has been suspended.\nReason: {reason}\n"
         "Please contact support if you believe this is a mistake.",
         "pending_order_exists": "You already have a payment in progress. You're welcome to cancel it below to "
@@ -129,6 +131,8 @@ TEXT = {
         "checkout_ready": "برای تکمیل پرداخت ${price} پلن {plan_name}، لطفاً روی دکمه‌ی زیر بزنید. "
         "این صفحه به‌صورت خودکار به‌روزرسانی میشه و به‌محض تأیید پرداخت، همینجا بهتون اطلاع می‌دیم.",
         "pay_now": "پرداخت →",
+        "free_plan_claimed": "✅ پلن آزمایشی رایگان شما ({plan_name}) فعال شد!",
+        "free_plan_already_used": "شما قبلاً از پلن آزمایشی رایگان استفاده کرده‌اید — لطفاً برای ادامه یک پلن پولی انتخاب کنید.",
         "banned": "⚠️ حساب شما مسدود شده است.\nدلیل: {reason}\n"
         "اگر فکر می‌کنید این یک اشتباهه، لطفاً با پشتیبانی تماس بگیرید.",
         "pending_order_exists": "شما یک سفارش نیمه‌کاره دارید. می‌تونید پایین لغوش کنید تا پلن یا روش پرداخت "
@@ -268,7 +272,53 @@ def _terms_kb(lang: str, plan_id: str) -> dict:
     return _kb([[{"text": _t(lang, "terms_agree_btn"), "callback_data": f"agreeterms:{plan_id}"}]])
 
 
-async def _show_payment_choice(chat_id: str, lang: str, plan: Plan, customer: Customer | None = None) -> None:
+async def _claim_free_plan(db, chat_id: str, lang: str, customer: Customer, plan: Plan) -> None:
+    """Mirrors routers/orders.py's free-plan branch: claimed once per
+    account ever, provisioned immediately instead of going through a
+    checkout — no payment method involved at all, so this must never fall
+    through to _show_payment_choice's payment-method flow (a $0 Stripe
+    checkout or a crypto payment with nothing to actually verify)."""
+    already_claimed = (
+        db.query(Order)
+        .filter(Order.customer_id == customer.id, Order.plan_id == plan.id)
+        .first()
+    )
+    if already_claimed:
+        await telegram.send_message(chat_id, _t(lang, "free_plan_already_used"))
+        return
+
+    already_has_account = (
+        db.query(Order)
+        .filter(Order.customer_id == customer.id, Order.status == OrderStatus.provisioned)
+        .first()
+        is not None
+    )
+    order = Order(
+        customer_id=customer.id,
+        plan_id=plan.id,
+        is_renewal=already_has_account,
+        payment_method=PaymentMethod.free,
+        amount_due=0,
+        status=OrderStatus.pending,
+        expires_at=datetime.utcnow() + timedelta(minutes=settings.ORDER_EXPIRY_MINUTES),
+    )
+    db.add(order)
+    db.commit()
+    db.refresh(order)
+
+    from app.routers.payments import _mark_paid_and_provision
+    await _mark_paid_and_provision(order.id)
+    db.refresh(order)
+
+    # _mark_paid_and_provision already sent its own failure notice to this
+    # same chat_id (background.py's _provision, on the Marzban-call-failed
+    # path) if provisioning didn't actually succeed — sending a hardcoded
+    # "activated" message unconditionally here would contradict it.
+    if order.status == OrderStatus.provisioned:
+        await telegram.send_message(chat_id, _t(lang, "free_plan_claimed", plan_name=plan.name))
+
+
+async def _show_payment_choice(db, chat_id: str, lang: str, plan: Plan, customer: Customer | None = None) -> None:
     if customer and not customer.email_verified:
         await telegram.send_message(
             chat_id,
@@ -282,6 +332,10 @@ async def _show_payment_choice(chat_id: str, lang: str, plan: Plan, customer: Cu
             _t(lang, "terms_prompt", site_base_url=settings.SITE_BASE_URL),
             reply_markup=_terms_kb(lang, plan.id),
         )
+        return
+    if plan.price_usdt == 0:
+        if customer:
+            await _claim_free_plan(db, chat_id, lang, customer, plan)
         return
     if not stripe_gateway.is_configured() and not _crypto_configured():
         await telegram.send_message(chat_id, _t(lang, "no_payment_methods"))
@@ -501,7 +555,7 @@ async def _handle_email_reply(db, chat_id: str, lang: str, email: str) -> None:
     if plan_id:
         plan = db.query(Plan).filter(Plan.id == plan_id).first()
         if plan:
-            await _show_payment_choice(chat_id, lang, plan, customer)
+            await _show_payment_choice(db, chat_id, lang, plan, customer)
             return
     await _show_main_menu(chat_id, lang, "welcome_back")
 
@@ -592,7 +646,7 @@ async def _handle_callback(db, callback_query: dict) -> None:
         if customer:
             plan = db.query(Plan).filter(Plan.id == plan_id).first()
             if plan:
-                await _show_payment_choice(chat_id, lang, plan, customer)
+                await _show_payment_choice(db, chat_id, lang, plan, customer)
         else:
             session["state"] = "awaiting_username"
             session["plan_id"] = plan_id
@@ -615,7 +669,7 @@ async def _handle_callback(db, callback_query: dict) -> None:
                 db.commit()
             plan = db.query(Plan).filter(Plan.id == plan_id).first()
             if plan:
-                await _show_payment_choice(chat_id, lang, plan, customer)
+                await _show_payment_choice(db, chat_id, lang, plan, customer)
         return
 
     if data.startswith("pay:"):
@@ -643,7 +697,7 @@ async def _handle_callback(db, callback_query: dict) -> None:
                 await telegram.send_message(chat_id, _t(lang, "order_cancelled"))
         plan = db.query(Plan).filter(Plan.id == plan_id).first()
         if plan:
-            await _show_payment_choice(chat_id, lang, plan, customer)
+            await _show_payment_choice(db, chat_id, lang, plan, customer)
         return
 
 

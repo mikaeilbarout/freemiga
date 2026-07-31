@@ -153,10 +153,14 @@
 let bannerIndex = 0;
 let bannerTimer = null;
 
+// Safe for text-node AND quoted-attribute-value context (unlike a bare
+// textContent->innerHTML round trip, which leaves " and ' untouched since
+// browsers don't need to escape them in plain text — but this is used for
+// alt="..." below, an attribute-value context).
 function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str == null ? '' : String(str);
-  return div.innerHTML;
+  return String(str == null ? '' : str).replace(/[&<>"']/g, c => (
+    {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]
+  ));
 }
 
 // Only allow relative paths or http(s) absolute URLs — blocks javascript:

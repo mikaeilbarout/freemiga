@@ -74,6 +74,14 @@ let allPlans = [];
 let currentPlansPage = 0;
 const isLoggedIn = {{ 'true' if nav_user else 'false' }};
 
+// Safe for text-node AND quoted-attribute-value context (unlike a bare
+// textContent->innerHTML round trip, which leaves " and ' untouched).
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+    {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]
+  ));
+}
+
 function planFeatures(p) {
   const check = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>';
   return `
@@ -103,11 +111,11 @@ function renderPlansPage() {
     <div class="card plan-card ${isFeatured ? 'featured' : ''} ${isFree ? 'free-trial' : ''}">
       ${isFeatured ? `<div class="tag-featured">${PLANS_I18N.bestValue}</div>` : ''}
       ${isFree ? `<div class="tag-free">${PLANS_I18N.freeTrialTag}</div>` : ''}
-      <div class="plan-name">${p.name}</div>
+      <div class="plan-name">${escapeHtml(p.name)}</div>
       <div class="plan-price">${isFree ? PLANS_I18N.priceFree : '$' + p.price_usdt}<span> / ${p.duration_days} days</span></div>
       <div class="plan-meta">${isFree ? PLANS_I18N.freeBilling : PLANS_I18N.billedOnce}</div>
       <ul class="plan-features">${planFeatures(p)}</ul>
-      <a class="btn ${isFeatured ? 'btn-primary' : 'btn-ghost'} btn-block" href="${isLoggedIn ? '/billing' : '/signup'}?plan=${p.id}">${isFree ? PLANS_I18N.claimFree : PLANS_I18N.choose.replace('__NAME__', p.name)}</a>
+      <a class="btn ${isFeatured ? 'btn-primary' : 'btn-ghost'} btn-block" href="${isLoggedIn ? '/billing' : '/signup'}?plan=${p.id}">${isFree ? PLANS_I18N.claimFree : PLANS_I18N.choose.replace('__NAME__', escapeHtml(p.name))}</a>
     </div>
   `;
   }).join('');
