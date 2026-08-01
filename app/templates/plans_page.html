@@ -60,6 +60,7 @@ const PLANS_I18N = {
   bestValue: {{ t('plan_best_value')|tojson }},
   freeTrialTag: {{ t('free_trial_tag')|tojson }},
   billedOnce: {{ t('plan_billed_once')|tojson }},
+  perGb: {{ t('plan_per_gb', price='__PRICE__')|tojson }},
   freeBilling: {{ t('plan_free_billing')|tojson }},
   choose: {{ t('plan_choose', name='__NAME__')|tojson }},
   claimFree: {{ t('claim_free_plan')|tojson }},
@@ -107,13 +108,16 @@ function renderPlansPage() {
   grid.innerHTML = pagePlans.map(p => {
     const isFree = p.price_usdt === 0;
     const isFeatured = p.id === featuredId;
+    const perGbMeta = isFree
+      ? PLANS_I18N.freeBilling
+      : `${PLANS_I18N.billedOnce} · ${PLANS_I18N.perGb.replace('__PRICE__', (p.price_usdt / p.data_limit_gb).toFixed(2))}`;
     return `
     <div class="card plan-card ${isFeatured ? 'featured' : ''} ${isFree ? 'free-trial' : ''}">
       ${isFeatured ? `<div class="tag-featured">${PLANS_I18N.bestValue}</div>` : ''}
       ${isFree ? `<div class="tag-free">${PLANS_I18N.freeTrialTag}</div>` : ''}
       <div class="plan-name">${escapeHtml(p.name)}</div>
       <div class="plan-price">${isFree ? PLANS_I18N.priceFree : '$' + p.price_usdt}<span> / ${p.duration_days} days</span></div>
-      <div class="plan-meta">${isFree ? PLANS_I18N.freeBilling : PLANS_I18N.billedOnce}</div>
+      <div class="plan-meta">${perGbMeta}</div>
       <ul class="plan-features">${planFeatures(p)}</ul>
       <a class="btn ${isFeatured ? 'btn-primary' : 'btn-ghost'} btn-block" href="${isLoggedIn ? '/billing' : '/signup'}?plan=${p.id}">${isFree ? PLANS_I18N.claimFree : PLANS_I18N.choose.replace('__NAME__', escapeHtml(p.name))}</a>
     </div>

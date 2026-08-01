@@ -575,7 +575,14 @@ input:focus, textarea:focus, select:focus {
 
 .plans-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* minmax(0, 1fr), not bare 1fr — a bare 1fr track is really
+     minmax(auto, 1fr), so it can never shrink below its content's
+     min-content width. Combined with .btn's white-space: nowrap, a plan
+     with a long name/button label (e.g. "Choose Unlimited Family Bundle
+     Pro") forced the whole grid wider than its container and past the
+     viewport on mobile. minmax(0, 1fr) lets the track actually shrink to
+     the available space and wrap normally instead. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
   max-width: 720px;
   margin: 0 auto;
@@ -590,7 +597,7 @@ input:focus, textarea:focus, select:focus {
   min-height: 1220px;
 }
 @media (max-width: 640px) {
-  .plans-grid { grid-template-columns: 1fr; max-width: 420px; min-height: 2440px; }
+  .plans-grid { grid-template-columns: minmax(0, 1fr); max-width: 420px; min-height: 2440px; }
 }
 .plan-card {
   position: relative;
@@ -615,11 +622,20 @@ input:focus, textarea:focus, select:focus {
 .plan-name { font-family: var(--font-display); font-size: 18px; font-weight: 600; margin-bottom: 4px; }
 .plan-price { font-size: 38px; font-weight: 700; font-family: var(--font-display); margin: 14px 0 2px; }
 .plan-price span { font-size: 15px; color: var(--text-dim); font-weight: 500; }
-.plan-meta { color: var(--text-dim); font-size: 13px; margin-bottom: 20px; }
+/* min-height reserves space for 2 lines even when text fits on one — the
+   per-GB value appended here (see plans_page.html) makes some cards' meta
+   text wrap to a second line and others not, which without this pushed
+   each card's feature list to a different vertical start, breaking row
+   alignment across the grid. */
+.plan-meta { color: var(--text-dim); font-size: 13px; margin-bottom: 20px; min-height: 40px; }
 .plan-features { list-style: none; padding: 0; margin: 0 0 24px; display: flex; flex-direction: column; gap: 10px; font-size: 13.5px; color: var(--text-dim); }
 .plan-features li { display: flex; align-items: center; gap: 8px; }
 .plan-features svg { width: 15px; height: 15px; color: var(--success); flex-shrink: 0; }
-.plan-card .btn { margin-top: auto; }
+/* Overrides .btn's sitewide white-space: nowrap — a long plan name (e.g.
+   "Choose Unlimited Family Bundle Pro") otherwise sits with almost no
+   breathing room against the button's own edges on narrow cards; wrapping
+   to two lines reads far better than a single cramped line. */
+.plan-card .btn { margin-top: auto; white-space: normal; line-height: 1.3; }
 .plans-empty { text-align: center; color: var(--text-dim); font-size: 14px; padding: 40px 0; }
 .plans-pagination {
   display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -639,16 +655,18 @@ input:focus, textarea:focus, select:focus {
 
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* minmax(0, 1fr) — see the .plans-grid comment above for why bare 1fr
+     is unsafe with long, non-wrapping content. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
   max-width: 960px;
   margin: 0 auto;
 }
 @media (max-width: 860px) {
-  .features-grid { grid-template-columns: repeat(2, 1fr); }
+  .features-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
-  .features-grid { grid-template-columns: 1fr; }
+  .features-grid { grid-template-columns: minmax(0, 1fr); }
 }
 .feature-card { padding: 26px 22px; }
 .feature-icon {

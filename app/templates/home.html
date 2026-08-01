@@ -37,11 +37,11 @@
   .trust-row svg { width: 15px; height: 15px; color: var(--text-dim); }
 
   .explore-grid {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px;
     max-width: 960px; margin: 0 auto;
   }
   @media (max-width: 860px) {
-    .explore-grid { grid-template-columns: 1fr; max-width: 420px; }
+    .explore-grid { grid-template-columns: minmax(0, 1fr); max-width: 420px; }
   }
   .explore-card {
     padding: 26px 24px; display: flex; flex-direction: column; gap: 10px;

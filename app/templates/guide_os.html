@@ -49,8 +49,8 @@
   .help-card h3 { color: var(--accent-2); margin-bottom: 8px; font-size: 14.5px; }
 
   .related-h { font-size: 15px; margin: 36px 0 14px; }
-  .related-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-  @media (max-width: 720px) { .related-grid { grid-template-columns: 1fr; } }
+  .related-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 720px) { .related-grid { grid-template-columns: minmax(0, 1fr); } }
   .related-card { padding: 18px 20px; display: flex; flex-direction: column; gap: 6px; transition: transform 0.2s ease, border-color 0.2s ease; }
   .related-card:hover { transform: translateY(-3px); border-color: var(--border-strong); }
   .related-card .name { font-weight: 600; font-size: 14px; }

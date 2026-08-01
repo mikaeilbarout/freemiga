@@ -16,8 +16,8 @@
   h1.title { font-size: 26px; margin-bottom: 10px; }
   .lead { color: var(--text-dim); font-size: 14.5px; line-height: 1.8; margin-bottom: 28px; max-width: 560px; }
 
-  .os-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-  @media (max-width: 620px) { .os-grid { grid-template-columns: 1fr; } }
+  .os-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  @media (max-width: 620px) { .os-grid { grid-template-columns: minmax(0, 1fr); } }
   .os-card {
     padding: 24px 24px; display: flex; flex-direction: column; gap: 8px;
     transition: transform 0.2s ease, border-color 0.2s ease;
