@@ -11,6 +11,8 @@
      article (optional — dict with title/description/image/author/
        published_iso/modified_iso, blog post detail pages only)
      faqs (optional — list of {"q":..., "a":...} dicts, the FAQ page only)
+     howto (optional — dict with name/description and a `steps` list of
+       {"name":..., "text":...}, the per-device setup guide pages only)
    lang_prefix/site_base_url/lang/dir/site_name all come from render(). #}
 {% set seo_image = seo_image if seo_image is defined else (site_base_url ~ "/static/img/og-default.png") %}
 {% set canonical_url = site_base_url ~ request.url.path %}
@@ -97,6 +99,23 @@
           "@type": "Question",
           "name": {{ item.q|tojson }},
           "acceptedAnswer": { "@type": "Answer", "text": {{ item.a|tojson }} }
+        }{{ "," if not loop.last }}
+        {%- endfor %}
+      ]
+    }
+    {%- endif %}
+    {%- if howto is defined %}
+    ,{
+      "@type": "HowTo",
+      "name": {{ howto.name|tojson }},
+      "description": {{ howto.description|tojson }},
+      "step": [
+        {%- for step in howto.steps %}
+        {
+          "@type": "HowToStep",
+          "position": {{ loop.index }},
+          "name": {{ step.name|tojson }},
+          "text": {{ step.text|tojson }}
         }{{ "," if not loop.last }}
         {%- endfor %}
       ]

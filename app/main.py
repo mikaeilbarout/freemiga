@@ -146,6 +146,17 @@ try:
 except OSError:
     ASSET_VERSION = "1"
 
+# Order here drives both the hub page's card order and each dedicated
+# page's "other devices" cross-link order (see guide.html / guide_os.html).
+GUIDE_OS_SLUGS = ["ios", "android", "windows", "macos"]
+GUIDE_APPS = {
+    "ios": ["Streisand", "Hiddify", "V2Box"],
+    "android": ["v2rayNG", "Hiddify", "NekoBox"],
+    "windows": ["v2rayN", "Hiddify Next", "NekoRay"],
+    "macos": ["Hiddify Next", "V2Box", "ClashX Pro"],
+}
+
+
 def render(request: Request, template_name: str, *, force_lang: str = None, status_code: int = 200, **extra_context):
     had_cookie = request.cookies.get(LANG_COOKIE) in SUPPORTED_LANGUAGES
     lang = force_lang or resolve_lang(request)
@@ -190,6 +201,8 @@ def render(request: Request, template_name: str, *, force_lang: str = None, stat
         "t": lambda key, **kw: i18n.t(lang, key, **kw),
         "asset_version": ASSET_VERSION,
         "nav_user": nav_user,
+        "GUIDE_OS_SLUGS": GUIDE_OS_SLUGS,
+        "GUIDE_APPS": GUIDE_APPS,
         # Every template can link to a marketing page in the visitor's
         # current language via {{ lang_prefix }}/plans etc., whether the
         # current page itself is a localized one or not (e.g. /pay/{id}
@@ -270,6 +283,10 @@ SITEMAP_PAGES = [
     ("how-it-works", "monthly", "0.7"),
     ("features", "monthly", "0.7"),
     ("guide", "monthly", "0.6"),
+    ("guide/ios", "monthly", "0.6"),
+    ("guide/android", "monthly", "0.6"),
+    ("guide/windows", "monthly", "0.6"),
+    ("guide/macos", "monthly", "0.6"),
     ("terms", "yearly", "0.3"),
     ("blog", "weekly", "0.7"),
     ("faq", "monthly", "0.6"),
@@ -425,6 +442,13 @@ def features_page_localized(request: Request, lang: str):
 @app.get("/{lang}/guide", response_class=HTMLResponse)
 def guide_page_localized(request: Request, lang: str):
     return _localized(request, lang, "guide.html")
+
+
+@app.get("/{lang}/guide/{os_slug}", response_class=HTMLResponse)
+def guide_os_page_localized(request: Request, lang: str, os_slug: str):
+    if os_slug not in GUIDE_OS_SLUGS:
+        raise StarletteHTTPException(404)
+    return _localized(request, lang, "guide_os.html", os=os_slug)
 
 
 @app.get("/{lang}/terms", response_class=HTMLResponse)
@@ -610,6 +634,13 @@ def terms_page(request: Request):
 @app.get("/guide", response_class=HTMLResponse)
 def guide_page(request: Request):
     return _redirect_to_localized(request, "/guide", 301)
+
+
+@app.get("/guide/{os_slug}", response_class=HTMLResponse)
+def guide_os_page(request: Request, os_slug: str):
+    if os_slug not in GUIDE_OS_SLUGS:
+        raise StarletteHTTPException(404)
+    return _redirect_to_localized(request, f"/guide/{os_slug}", 301)
 
 
 @app.get("/blog", response_class=HTMLResponse)

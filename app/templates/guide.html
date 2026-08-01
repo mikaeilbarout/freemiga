@@ -13,28 +13,23 @@
   .page-wrap { padding: 40px 16px 100px; }
   .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text-faint); font-size: 13px; margin-bottom: 22px; }
   .back-link:hover { color: var(--text-dim); }
-  h1.title { font-size: 26px; margin-bottom: 28px; }
+  h1.title { font-size: 26px; margin-bottom: 10px; }
+  .lead { color: var(--text-dim); font-size: 14.5px; line-height: 1.8; margin-bottom: 28px; max-width: 560px; }
 
-  .os-tabs { display: flex; gap: 8px; margin-bottom: 22px; }
-  .os-tab { padding: 9px 18px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); color: var(--text-dim); }
-  .os-tab.active { background: var(--gradient); color: #05060a; border-color: transparent; }
-  .os-section { display: none; }
-  .os-section.active { display: block; }
-
-  .step { padding: 20px 22px; margin-bottom: 14px; }
-  .step-top { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-  .step-num {
-    display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
-    border-radius: 8px; background: var(--gradient); color: #05060a; font-weight: 700; font-size: 12px;
-    font-family: var(--font-display); flex-shrink: 0;
+  .os-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  @media (max-width: 620px) { .os-grid { grid-template-columns: 1fr; } }
+  .os-card {
+    padding: 24px 24px; display: flex; flex-direction: column; gap: 8px;
+    transition: transform 0.2s ease, border-color 0.2s ease;
   }
-  .step h3 { font-size: 14.5px; }
-  .step p { font-size: 13px; color: var(--text-dim); line-height: 1.8; margin: 0; }
-  .apps { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
-  .app-badge { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 14px; font-size: 12.5px; color: var(--text-dim); }
+  .os-card:hover { transform: translateY(-3px); border-color: var(--border-strong); }
+  .os-card .name { font-weight: 700; font-size: 16px; }
+  .os-card .desc { color: var(--text-dim); font-size: 13px; line-height: 1.7; }
+  .os-card .link-arrow { color: var(--accent-2); font-size: 12.5px; font-weight: 600; margin-top: 6px; }
 
-  .help-card { border-color: rgba(124,92,255,0.4); }
-  .help-card h3 { color: var(--accent-2); margin-bottom: 8px; }
+  .help-card { border-color: rgba(124,92,255,0.4); margin-top: 26px; padding: 20px 22px; }
+  .help-card h3 { color: var(--accent-2); margin-bottom: 8px; font-size: 14.5px; }
+  .help-card p { font-size: 13px; color: var(--text-dim); line-height: 1.8; margin: 0; }
 </style>
 </head>
 <body>
@@ -47,53 +42,19 @@
   <div class="container-mid">
     <a class="back-link" href="/dashboard">{{ '→' if dir == 'rtl' else '←' }} {{ t('pay_back_link') }}</a>
     <h1 class="title">{{ t('guide_h1') }}</h1>
+    <p class="lead">{{ t('guide_hub_lead') }}</p>
 
-    <div class="os-tabs">
-      <div class="os-tab active" data-os="ios">{{ t('guide_tab_ios') }}</div>
-      <div class="os-tab" data-os="android">{{ t('guide_tab_android') }}</div>
+    <div class="os-grid">
+      {% for os_slug in GUIDE_OS_SLUGS %}
+      <a class="card os-card" href="{{ lang_prefix }}/guide/{{ os_slug }}">
+        <span class="name">{{ t('guide_os_label_' ~ os_slug) }}</span>
+        <span class="desc">{{ t('guide_os_desc_' ~ os_slug) }}</span>
+        <span class="link-arrow">{{ t('guide_card_link') }}</span>
+      </a>
+      {% endfor %}
     </div>
 
-    <div class="os-section active" id="os-ios">
-      <div class="card step">
-        <div class="step-top"><span class="step-num">1</span><h3>{{ t('guide_step1_h') }}</h3></div>
-        <p>{{ t('guide_ios_step1_p') }}</p>
-        <div class="apps">
-          <span class="app-badge">Streisand</span>
-          <span class="app-badge">Hiddify</span>
-          <span class="app-badge">V2Box</span>
-        </div>
-      </div>
-      <div class="card step">
-        <div class="step-top"><span class="step-num">2</span><h3>{{ t('guide_step2_h') }}</h3></div>
-        <p>{{ t('guide_ios_step2_p') }}</p>
-      </div>
-      <div class="card step">
-        <div class="step-top"><span class="step-num">3</span><h3>{{ t('guide_step3_h') }}</h3></div>
-        <p>{{ t('guide_ios_step3_p') }}</p>
-      </div>
-    </div>
-
-    <div class="os-section" id="os-android">
-      <div class="card step">
-        <div class="step-top"><span class="step-num">1</span><h3>{{ t('guide_step1_h') }}</h3></div>
-        <p>{{ t('guide_android_step1_p') }}</p>
-        <div class="apps">
-          <span class="app-badge">v2rayNG</span>
-          <span class="app-badge">Hiddify</span>
-          <span class="app-badge">NekoBox</span>
-        </div>
-      </div>
-      <div class="card step">
-        <div class="step-top"><span class="step-num">2</span><h3>{{ t('guide_step2_h') }}</h3></div>
-        <p>{{ t('guide_android_step2_p') }}</p>
-      </div>
-      <div class="card step">
-        <div class="step-top"><span class="step-num">3</span><h3>{{ t('guide_step3_h') }}</h3></div>
-        <p>{{ t('guide_android_step3_p') }}</p>
-      </div>
-    </div>
-
-    <div class="card step help-card">
+    <div class="card help-card">
       <h3>{{ t('guide_help_h') }}</h3>
       <p>{{ t('guide_help_pre') }} <a href="/dashboard" style="color:var(--accent-2)">{{ t('guide_help_link') }}</a>.</p>
     </div>
@@ -103,14 +64,5 @@
 </main>
 
 {% include "_footer.html" %}
-
-<script>
-document.querySelectorAll('.os-tab').forEach(t => t.addEventListener('click', () => {
-  document.querySelectorAll('.os-tab').forEach(x => x.classList.remove('active'));
-  document.querySelectorAll('.os-section').forEach(x => x.classList.remove('active'));
-  t.classList.add('active');
-  document.getElementById('os-' + t.dataset.os).classList.add('active');
-}));
-</script>
 </body>
 </html>
