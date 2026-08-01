@@ -95,6 +95,7 @@
   <div class="container">
     <div class="admin-header">
       <span class="brand"><span class="brand-mark">F</span><span class="brand-name">{{ site_name }}</span><span class="muted" style="font-size:13px;margin-left:6px">Admin</span></span>
+      <button class="btn btn-ghost btn-sm" onclick="adminLogout()">Log out</button>
     </div>
     <div class="stats-strip" id="statsStrip"></div>
     <div class="tabs" role="tablist">
@@ -257,6 +258,20 @@ function goToTicketsNeedingReply() {
   loadTickets(true);
 }
 
+function showAdminPanel() {
+  document.getElementById('loginCard').style.display = 'none';
+  document.getElementById('panel').style.display = 'block';
+  loadCustomers(); loadOrders(); loadTickets(); loadAuditLog(); loadPlans(); loadBanners(); loadBlog(); loadStats();
+}
+
+async function adminLogout() {
+  await fetch('/api/admin/logout', {method: 'POST'});
+  document.getElementById('panel').style.display = 'none';
+  document.getElementById('loginCard').style.display = 'flex';
+  document.getElementById('adminUser').value = '';
+  document.getElementById('adminPass').value = '';
+}
+
 async function adminLogin() {
   const res = await fetch('/api/admin/login', {
     method: 'POST',
@@ -270,10 +285,17 @@ async function adminLogin() {
     document.getElementById('loginErr').textContent = 'Login failed';
     return;
   }
-  document.getElementById('loginCard').style.display = 'none';
-  document.getElementById('panel').style.display = 'block';
-  loadCustomers(); loadOrders(); loadTickets(); loadAuditLog(); loadPlans(); loadBanners(); loadBlog(); loadStats();
+  showAdminPanel();
 }
+
+// The session cookie set by /api/admin/login is still valid across page
+// reloads (it isn't tied to any per-tab state) — without this check the
+// login form showed unconditionally on every refresh, forcing a re-login
+// even though the browser still held a perfectly good session.
+(async function checkExistingAdminSession() {
+  const res = await fetch('/api/admin/stats');
+  if (res.ok) showAdminPanel();
+})();
 
 const ADMIN_PAGE_SIZE = 10;
 // Not cached across calls — always fresh so a plan created after the
