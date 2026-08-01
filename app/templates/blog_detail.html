@@ -20,6 +20,7 @@
   "modified_iso": post.modified_iso,
 } %}
 {% include "_seo_head.html" %}
+{% from "_blog_card.html" import blog_card %}
 <style>
   .blog-article-wrap { max-width: 760px; margin: 0 auto; }
   .blog-back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text-faint); font-size: 13px; margin-bottom: 22px; }
@@ -50,7 +51,12 @@
   .blog-explore h2 { font-family: var(--font-display); font-size: 16px; margin: 0 0 12px; }
   .blog-explore-links { display: flex; flex-wrap: wrap; gap: 10px; }
   .blog-related { max-width: 1100px; margin: 56px auto 0; }
-  .blog-related h2 { font-family: var(--font-display); font-size: 18px; text-align: center; margin-bottom: 24px; }
+  /* Direct-child combinator only — .blog-related also contains a nested
+     .blog-grid of .blog-card elements, each with its own <h2> title; a
+     bare "h2" descendant selector here was overriding those titles too
+     (centering them, wrong size) since it matched every h2 inside
+     .blog-related, not just this section's own heading. */
+  .blog-related > h2 { font-family: var(--font-display); font-size: 18px; text-align: center; margin-bottom: 24px; }
 </style>
 </head>
 <body>
@@ -104,16 +110,7 @@
     <h2>{{ t('blog_related_title') }}</h2>
     <div class="blog-grid">
       {% for rp in related_posts %}
-      <article class="card blog-card">
-        {% if rp.featured_image %}
-        <img class="blog-card-img" src="{{ rp.featured_image }}" alt="{{ rp.title }}" loading="lazy" decoding="async" width="640" height="360">
-        {% endif %}
-        <div class="blog-card-body">
-          <div class="blog-card-meta"><span>{{ t('blog_reading_time', n=rp.reading_time_min) }}</span></div>
-          <h2><a href="{{ lang_prefix }}/blog/{{ rp.slug }}">{{ rp.title }}</a></h2>
-          <p>{{ rp.excerpt }}</p>
-        </div>
-      </article>
+      {{ blog_card(rp, lang_prefix, t) }}
       {% endfor %}
     </div>
   </div>
