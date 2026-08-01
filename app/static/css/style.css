@@ -832,9 +832,9 @@ input:focus, textarea:focus, select:focus {
 .blog-card-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: var(--panel); display: block; }
 .blog-card-img-placeholder {
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, rgba(124,92,255,0.16), rgba(34,211,238,0.1));
+  background: var(--gradient);
 }
-.blog-card-img-placeholder svg { width: 34px; height: 34px; color: var(--text-faint); opacity: 0.7; }
+.blog-card-img-placeholder svg { width: 52px; height: 52px; color: #05060a; opacity: 0.55; }
 .blog-card-body { padding: 22px; display: flex; flex-direction: column; flex: 1; }
 .blog-card-meta { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--text-faint); margin-bottom: 10px; }
 .blog-card-category {
