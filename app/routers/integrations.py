@@ -41,7 +41,13 @@ async def report_status(payload: MarzbanGuardStatusIn, db: Session = Depends(get
     directly. This only mirrors local state and, if the ban state
     actually changed, sends the same customer-facing Telegram notice the
     admin-initiated ban/unban flow sends (see routers/admin.py)."""
-    customer = db.query(Customer).filter(Customer.username == payload.username).first()
+    # payload.username is a Marzban username, which — since Order.marzban_username
+    # — is "{customer.username}_{order_id_prefix}", not the bare customer
+    # username. customer.username is strictly alphanumeric (see
+    # SignupIn.username_ok), so it can never itself contain "_", making the
+    # split unambiguous: everything before the first "_" is the customer.
+    base_username = payload.username.split("_", 1)[0]
+    customer = db.query(Customer).filter(Customer.username == base_username).first()
     if not customer:
         # Not necessarily an error (e.g. a renamed/deleted username) —
         # still 200 so marzban-guard doesn't keep retrying pointlessly.

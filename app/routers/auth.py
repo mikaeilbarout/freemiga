@@ -12,7 +12,7 @@ from app.auth import get_current_customer, hash_password, verify_password
 from app.database import get_db
 from app.lang import get_lang
 from app.limiter import limiter
-from app.models import Customer, EmailVerificationToken, PasswordResetCode
+from app.models import Customer, EmailVerificationToken, Order, OrderStatus, PasswordResetCode
 from app.schemas import (
     ChangePasswordIn,
     CustomerOut,
@@ -153,17 +153,25 @@ async def delete_account(
     db: Session = Depends(get_db),
     lang: str = Depends(get_lang),
 ):
-    """Customer-initiated account deletion. The Marzban VPN account is
-    permanently removed. The Customer row itself is anonymized rather than
-    hard-deleted, so historical orders/tickets stay intact for bookkeeping —
-    the username is freed up and every other identifying field is cleared."""
+    """Customer-initiated account deletion. Every Marzban VPN account this
+    customer has (one per provisioned order — see Order.marzban_username)
+    is permanently removed. The Customer row itself is anonymized rather
+    than hard-deleted, so historical orders/tickets stay intact for
+    bookkeeping — the username is freed up and every other identifying
+    field is cleared."""
     if not verify_password(payload.password, customer.password_hash):
         raise HTTPException(401, i18n.t(lang, "err_incorrect_password"))
 
-    try:
-        await marzban.delete_vpn_user(customer.username)
-    except Exception:
-        logger.exception("Failed to delete Marzban user %s during account deletion", customer.username)
+    provisioned_orders = db.query(Order).filter(
+        Order.customer_id == customer.id, Order.status == OrderStatus.provisioned
+    ).all()
+    for order in provisioned_orders:
+        try:
+            await marzban.delete_vpn_user(order.marzban_username)
+        except Exception:
+            logger.exception(
+                "Failed to delete Marzban user %s during account deletion", order.marzban_username
+            )
 
     customer.username = f"deleted_{customer.id}"
     customer.email = None

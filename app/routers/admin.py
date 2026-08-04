@@ -274,12 +274,20 @@ async def ban_customer(customer_id: str, payload: BanIn, db: Session = Depends(g
     db.commit()
     _log_action(db, "ban", customer_id, payload.reason)
 
-    try:
-        await marzban.set_user_status(customer.username, active=False)
-    except Exception:
-        # Customer is still marked banned locally even if the VPN user
-        # doesn't exist yet (e.g. banned before their first purchase).
-        pass
+    # Every provisioned order is its own independent Marzban account (see
+    # Order.marzban_username) — a customer-wide suspension has to disable
+    # each one individually, not just whichever one used to be the sole
+    # account under the old shared-account model.
+    provisioned_orders = db.query(Order).filter(
+        Order.customer_id == customer_id, Order.status == OrderStatus.provisioned
+    ).all()
+    for order in provisioned_orders:
+        try:
+            await marzban.set_user_status(order.marzban_username, active=False)
+        except Exception:
+            # Customer is still marked banned locally even if a given VPN
+            # user doesn't exist anymore (e.g. deleted by hand in Marzban).
+            pass
 
     if customer.telegram_chat_id:
         await telegram.send_message(
@@ -302,10 +310,14 @@ async def unban_customer(customer_id: str, db: Session = Depends(get_db)):
     db.commit()
     _log_action(db, "unban", customer_id)
 
-    try:
-        await marzban.set_user_status(customer.username, active=True)
-    except Exception:
-        pass
+    provisioned_orders = db.query(Order).filter(
+        Order.customer_id == customer_id, Order.status == OrderStatus.provisioned
+    ).all()
+    for order in provisioned_orders:
+        try:
+            await marzban.set_user_status(order.marzban_username, active=True)
+        except Exception:
+            pass
 
     if customer.telegram_chat_id:
         await telegram.send_message(customer.telegram_chat_id, "✅ Your account suspension has been lifted.")
@@ -320,10 +332,10 @@ async def grant_plan(customer_id: str, payload: GrantPlanIn, db: Session = Depen
     Order + provisioning trail a real purchase would, at $0, so the
     customer's dashboard, order history, and vpn-status all stay accurate
     instead of silently going out of sync with what's actually running in
-    Marzban. Reuses create_vpn_user/extend_vpn_user exactly as a normal
-    order does, including the fallback that now handles a username Marzban
-    already knows about (e.g. one an admin created directly in Marzban's
-    own panel before this endpoint existed) instead of failing outright."""
+    Marzban. Goes through the same _provision() every real order does, so
+    this always creates its own independent Marzban account (see
+    Order.marzban_username) rather than merging into any plan the customer
+    already has."""
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(404, "Customer not found")

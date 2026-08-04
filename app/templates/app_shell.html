@@ -191,11 +191,13 @@
   .quick-action .qa-title { font-size: 13.5px; font-weight: 600; }
   .quick-action .qa-sub { font-size: 12px; color: var(--text-faint); }
 
+  .status-hero-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; }
   .status-hero {
-    padding: 26px 26px; margin-bottom: 24px;
+    padding: 26px 26px;
     background: linear-gradient(135deg, rgba(124, 92, 255, 0.12), rgba(34, 211, 238, 0.06));
   }
   .status-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .status-hero .plan-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .status-hero .plan-name-big { font-family: var(--font-display); font-size: 22px; font-weight: 600; }
   .status-hero .status-sub { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
   .status-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -244,15 +246,12 @@
       </div>
 
       <section class="block">
-        <div class="card status-hero" id="statusHero">
-          <div class="status-hero-top">
-            <div>
-              <div class="plan-name-big" id="statusPlanName">{{ t('dashboard_loading') }}</div>
-              <div class="status-sub" id="statusSub"></div>
-            </div>
-            <div class="status-hero-actions">
-              <button class="btn btn-ghost btn-sm" id="statusVpnLinkBtn" style="display:none" onclick="copyStatusVpnLink()">{{ t('pay_copy_link') }}</button>
-              <a class="btn btn-primary btn-sm" id="statusCta" href="/billing">{{ t('dashboard_buy_plan') }}</a>
+        <div class="status-hero-list" id="statusHeroList">
+          <div class="card status-hero">
+            <div class="status-hero-top">
+              <div>
+                <div class="plan-name-big">{{ t('dashboard_loading') }}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -570,6 +569,9 @@ const DASH_I18N = {
   statusDisabledSub: {{ t('dashboard_status_disabled_sub')|tojson }},
   statusSuspended: {{ t('dashboard_status_suspended', name='__NAME__')|tojson }},
   statusSuspendedSub: {{ t('dashboard_status_suspended_sub')|tojson }},
+  badgeActive: {{ t('dashboard_badge_active')|tojson }},
+  badgeDeactivated: {{ t('dashboard_badge_deactivated')|tojson }},
+  badgeSuspended: {{ t('dashboard_badge_suspended')|tojson }},
   vpnLinkCopied: {{ t('dashboard_link_copied')|tojson }},
   copyLink: {{ t('pay_copy_link')|tojson }},
   renewPlan: {{ t('dashboard_renew_plan')|tojson }},
@@ -629,12 +631,129 @@ async function loadMeDashboard() {
   }
 }
 
-let statusVpnLink = null;
+function statusHeroCta(extraAttrs) {
+  // Every card's CTA needs the same "go to billing" in-app navigation
+  // instead of a real link, except the pending-order card which links
+  // straight to that order's /pay/id page.
+  return `onclick="event.preventDefault();activateSection('billing',{pushHistory:true})" ${extraAttrs || ''}`;
+}
 
-function copyStatusVpnLink() {
-  if (!statusVpnLink) return;
-  navigator.clipboard.writeText(statusVpnLink);
-  showToast(DASH_I18N.vpnLinkCopied, 'success');
+function statusHeroCard({ badge, badgeClass, name, sub, ctaLabel, ctaHref, ctaOnclick, linkBtn }) {
+  return `
+    <div class="card status-hero">
+      <div class="status-hero-top">
+        <div>
+          <div class="plan-name-row">
+            <div class="plan-name-big">${name}</div>
+            ${badge ? `<span class="badge ${badgeClass}">${badge}</span>` : ''}
+          </div>
+          ${sub ? `<div class="status-sub">${sub}</div>` : ''}
+        </div>
+        <div class="status-hero-actions">
+          ${linkBtn ? `<button class="btn btn-ghost btn-sm" data-link="${linkBtn}" onclick="copyOrderLink(this)">${DASH_I18N.copyLink}</button>` : ''}
+          <a class="btn btn-primary btn-sm" href="${ctaHref}" ${ctaOnclick}>${ctaLabel}</a>
+        </div>
+      </div>
+    </div>`;
+}
+
+// Renders one card per Marzban account (one per provisioned order — see
+// Order.marzban_username in models.py). Plans are fully independent: one
+// expiring or running out of data must never affect how any of the
+// customer's other cards render.
+function renderPlanCard(p, { banned, plan, order }) {
+  const planName = plan ? plan.name : DASH_I18N.statusActivePlan;
+  const goBilling = statusHeroCta();
+
+  // A marzban-guard or admin suspension takes priority over everything
+  // else, no matter what Marzban's live status happens to say — the ban
+  // notice above already explains why, and no card may claim "Active" (or
+  // offer a "Copy VPN link" button) for a suspended account. This is
+  // exactly the inconsistency routers/integrations.py's docstring says the
+  // ban-sync webhook exists to prevent.
+  if (banned) {
+    return statusHeroCard({
+      badge: DASH_I18N.badgeSuspended, badgeClass: 'badge-danger',
+      name: DASH_I18N.statusSuspended.replace('__NAME__', planName),
+      sub: DASH_I18N.statusSuspendedSub,
+      ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling,
+    });
+  }
+
+  // p.has_account reflects Marzban directly (live) for this specific
+  // order's account, not just "this order was provisioned once" — this is
+  // the only accurate source for "is this exact plan still active right
+  // now" and its real expiry date. Falls back to a generic active label
+  // only if Marzban couldn't be reached at all, so a brief outage doesn't
+  // wrongly mark a plan as deactivated.
+  if (p.has_account && !p.unreachable) {
+    const linkBtn = p.subscription_url || null;
+    if (p.marzban_status === 'active') {
+      return statusHeroCard({
+        badge: DASH_I18N.badgeActive, badgeClass: 'badge-success',
+        name: DASH_I18N.statusActive.replace('__NAME__', planName),
+        sub: p.expire_at
+          ? DASH_I18N.statusActiveUntil.replace('__DATE__', new Date(p.expire_at).toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'}))
+          : DASH_I18N.statusActiveGeneric,
+        ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling, linkBtn,
+      });
+    }
+    // limited (data ran out), disabled, or anything else Marzban reports
+    // besides "active" all read as deactivated on this dashboard, per spec.
+    if (p.marzban_status === 'limited') {
+      return statusHeroCard({
+        badge: DASH_I18N.badgeDeactivated, badgeClass: 'badge-danger',
+        name: DASH_I18N.statusLimited.replace('__NAME__', planName),
+        sub: DASH_I18N.statusLimitedSub,
+        ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling,
+      });
+    }
+    if (p.marzban_status === 'disabled') {
+      return statusHeroCard({
+        badge: DASH_I18N.badgeDeactivated, badgeClass: 'badge-danger',
+        name: DASH_I18N.statusDisabled.replace('__NAME__', planName),
+        sub: DASH_I18N.statusDisabledSub,
+        ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling,
+      });
+    }
+    return statusHeroCard({
+      badge: DASH_I18N.badgeDeactivated, badgeClass: 'badge-danger',
+      name: DASH_I18N.statusExpired.replace('__NAME__', planName),
+      sub: DASH_I18N.statusExpiredSub,
+      ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling,
+    });
+  }
+
+  // Marzban unreachable right now for this account — fall back to the
+  // order-date estimate rather than wrongly flipping it to "deactivated"
+  // during a brief outage.
+  const estExpiry = (order && plan) ? new Date(new Date(order.created_at).getTime() + plan.duration_days * 86400000) : null;
+  return statusHeroCard({
+    badge: DASH_I18N.badgeActive, badgeClass: 'badge-success',
+    name: DASH_I18N.statusActive.replace('__NAME__', planName),
+    sub: estExpiry
+      ? DASH_I18N.statusRenews.replace('__DATE__', estExpiry.toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'}))
+      : DASH_I18N.statusActiveGeneric,
+    ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling,
+    linkBtn: p.subscription_url || null,
+  });
+}
+
+function renderPendingCard(order) {
+  return statusHeroCard({
+    badge: DASH_I18N.statusLabels.pending, badgeClass: 'badge-warning',
+    name: DASH_I18N.orderPendingName,
+    sub: DASH_I18N.orderPendingSub,
+    ctaLabel: DASH_I18N.completePayment, ctaHref: `/pay/${order.id}`, ctaOnclick: '',
+  });
+}
+
+function renderEmptyStatusCard() {
+  return statusHeroCard({
+    name: DASH_I18N.noPlan,
+    sub: DASH_I18N.noPlanSub,
+    ctaLabel: DASH_I18N.buyPlan, ctaHref: '/billing', ctaOnclick: statusHeroCta(),
+  });
 }
 
 async function loadStatus() {
@@ -644,8 +763,9 @@ async function loadStatus() {
   const me = meRes.ok ? await meRes.json() : { is_banned: false };
   const orders = await ordersRes.json();
   const plans = await plansRes.json();
-  const vpn = vpnRes.ok ? await vpnRes.json() : { has_account: false, unreachable: true };
+  const vpn = vpnRes.ok ? await vpnRes.json() : { plans: [] };
   const planById = Object.fromEntries(plans.map(p => [p.id, p]));
+  const orderById = Object.fromEntries(orders.map(o => [o.id, o]));
 
   const freePlan = plans.find(p => p.price_usdt === 0);
   if (freePlan) {
@@ -657,102 +777,14 @@ async function loadStatus() {
     }
   }
 
-  const active = orders.filter(o => o.status === 'provisioned').sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-  const pending = orders.find(o => o.status === 'pending');
+  const pendingOrders = orders.filter(o => o.status === 'pending').sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const planEntries = (vpn.plans || []).slice().sort((a, b) => (a.plan_name || '').localeCompare(b.plan_name || ''));
 
-  const nameEl = document.getElementById('statusPlanName');
-  const subEl = document.getElementById('statusSub');
-  const cta = document.getElementById('statusCta');
-  const linkBtn = document.getElementById('statusVpnLinkBtn');
-  linkBtn.style.display = 'none';
-  statusVpnLink = null;
-
-  // A marzban-guard or admin suspension takes priority over everything
-  // below, no matter what Marzban's live status happens to say — the ban
-  // notice above already explains why, and this card must never
-  // contradict it by claiming "Active" (or worse, offering a "Copy VPN
-  // link" button) for a suspended account. This is exactly the
-  // inconsistency routers/integrations.py's docstring says the ban-sync
-  // webhook exists to prevent.
-  if (me.is_banned && active) {
-    const plan = planById[active.plan_id];
-    const planName = plan ? plan.name : DASH_I18N.statusActivePlan;
-    nameEl.textContent = DASH_I18N.statusSuspended.replace('__NAME__', planName);
-    subEl.textContent = DASH_I18N.statusSuspendedSub;
-    cta.textContent = DASH_I18N.renewPlan;
-    cta.href = '/billing';
-    cta.dataset.section = 'billing';
-    cta.onclick = (e) => { e.preventDefault(); activateSection('billing', {pushHistory: true}); };
-    return;
-  }
-
-  // vpn.has_account reflects Marzban directly (live), not just "we've
-  // provisioned an order before" — a renewal extends the *same* account
-  // rather than creating a new one, so this is the only accurate source
-  // for "is it still active right now" and the real expiry date. Falls
-  // back to the old order-date estimate only if Marzban couldn't be
-  // reached at all, so a brief outage there doesn't blank the dashboard.
-  if (active && vpn.has_account && !vpn.unreachable) {
-    const plan = planById[active.plan_id];
-    const planName = plan ? plan.name : DASH_I18N.statusActivePlan;
-    if (vpn.subscription_url) {
-      statusVpnLink = vpn.subscription_url;
-      linkBtn.style.display = '';
-    }
-    if (vpn.marzban_status === 'active') {
-      nameEl.textContent = DASH_I18N.statusActive.replace('__NAME__', planName);
-      subEl.textContent = vpn.expire_at
-        ? DASH_I18N.statusActiveUntil.replace('__DATE__', new Date(vpn.expire_at).toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'}))
-        : DASH_I18N.statusActiveGeneric;
-    } else if (vpn.marzban_status === 'limited') {
-      nameEl.textContent = DASH_I18N.statusLimited.replace('__NAME__', planName);
-      subEl.textContent = DASH_I18N.statusLimitedSub;
-    } else if (vpn.marzban_status === 'disabled') {
-      nameEl.textContent = DASH_I18N.statusDisabled.replace('__NAME__', planName);
-      subEl.textContent = DASH_I18N.statusDisabledSub;
-    } else {
-      nameEl.textContent = DASH_I18N.statusExpired.replace('__NAME__', planName);
-      subEl.textContent = DASH_I18N.statusExpiredSub;
-    }
-    cta.textContent = DASH_I18N.renewPlan;
-    cta.href = '/billing';
-    cta.dataset.section = 'billing';
-  } else if (active) {
-    // Marzban unreachable right now — fall back to the order-date estimate
-    // rather than showing nothing.
-    const plan = planById[active.plan_id];
-    const activatedAt = new Date(active.created_at);
-    const estExpiry = plan ? new Date(activatedAt.getTime() + plan.duration_days * 86400000) : null;
-    nameEl.textContent = plan ? DASH_I18N.statusActive.replace('__NAME__', plan.name) : DASH_I18N.statusActivePlan;
-    subEl.textContent = estExpiry
-      ? DASH_I18N.statusRenews.replace('__DATE__', estExpiry.toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'}))
-      : DASH_I18N.statusActiveGeneric;
-    if (active.subscription_url) {
-      statusVpnLink = active.subscription_url;
-      linkBtn.style.display = '';
-    }
-    cta.textContent = DASH_I18N.renewPlan;
-    cta.href = '/billing';
-    cta.dataset.section = 'billing';
-  } else if (pending) {
-    nameEl.textContent = DASH_I18N.orderPendingName;
-    subEl.textContent = DASH_I18N.orderPendingSub;
-    cta.textContent = DASH_I18N.completePayment;
-    cta.href = `/pay/${pending.id}`;
-    delete cta.dataset.section;
-  } else {
-    nameEl.textContent = DASH_I18N.noPlan;
-    subEl.textContent = DASH_I18N.noPlanSub;
-    cta.textContent = DASH_I18N.buyPlan;
-    cta.href = '/billing';
-    cta.dataset.section = 'billing';
-  }
-  // statusCta's target section can change at runtime (billing vs a /pay/id
-  // link), so it needs its own listener bound fresh each time rather than
-  // relying on the page-load-time .nav-section-link wiring above.
-  cta.onclick = (e) => {
-    if (cta.dataset.section) { e.preventDefault(); activateSection(cta.dataset.section, {pushHistory: true}); }
-  };
+  const cards = [
+    ...planEntries.map(p => renderPlanCard(p, { banned: me.is_banned, plan: planById[p.plan_id], order: orderById[p.order_id] })),
+    ...pendingOrders.map(renderPendingCard),
+  ];
+  document.getElementById('statusHeroList').innerHTML = cards.length ? cards.join('') : renderEmptyStatusCard();
 }
 
 async function loadRecentOrders() {

@@ -1,10 +1,11 @@
+import asyncio
 from datetime import datetime, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app import i18n
 from app.auth import get_current_customer
@@ -298,38 +299,56 @@ def my_orders(
     )
 
 
-@router.get("/vpn-status/me")
-async def vpn_status(customer: Customer = Depends(get_current_customer)):
-    """The customer's own VPN account is a single Marzban user shared across
-    every renewal, so 'is my plan still active' isn't something the local
-    Order rows alone can answer accurately (a renewal extends from whichever
-    is later — current expiry or now — see services/marzban.py) — this asks
-    Marzban directly, live, rather than estimating from order-creation dates
-    the way the dashboard's summary card used to."""
+async def _live_status_for_order(order: Order) -> dict:
+    marzban_username = order.marzban_username
+    base = {
+        "order_id": order.id,
+        "plan_id": order.plan_id,
+        "plan_name": order.plan.name,
+    }
     try:
-        data = await marzban.get_vpn_user(customer.username)
+        data = await marzban.get_vpn_user(marzban_username)
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             return {
-                "has_account": False, "subscription_url": None,
+                **base, "has_account": False, "subscription_url": None,
                 "marzban_status": None, "expire_at": None, "unreachable": False,
             }
         return {
-            "has_account": False, "subscription_url": None,
+            **base, "has_account": False, "subscription_url": order.subscription_url,
             "marzban_status": None, "expire_at": None, "unreachable": True,
         }
     except httpx.HTTPError:
         return {
-            "has_account": False, "subscription_url": None,
+            **base, "has_account": False, "subscription_url": order.subscription_url,
             "marzban_status": None, "expire_at": None, "unreachable": True,
         }
 
     sub_path = data.get("subscription_url") or ""
     expire_ts = data.get("expire")
     return {
+        **base,
         "has_account": True,
-        "subscription_url": f"{settings.MARZBAN_BASE_URL}{sub_path}" if sub_path else None,
+        "subscription_url": f"{settings.MARZBAN_BASE_URL}{sub_path}" if sub_path else order.subscription_url,
         "marzban_status": data.get("status"),  # "active" | "expired" | "limited" | "disabled"
         "expire_at": datetime.utcfromtimestamp(expire_ts).isoformat() + "Z" if expire_ts else None,
         "unreachable": False,
     }
+
+
+@router.get("/vpn-status/me")
+async def vpn_status(customer: Customer = Depends(get_current_customer), db: Session = Depends(get_db)):
+    """Every provisioned order is its own independent Marzban account (see
+    Order.marzban_username) — a plan doesn't share state with any other
+    plan the customer bought, so 'is my plan still active' has to be
+    answered per order, live from Marzban, rather than picking one
+    account to represent the whole customer the way this used to."""
+    orders = (
+        db.query(Order)
+        .options(selectinload(Order.plan))
+        .filter(Order.customer_id == customer.id, Order.status == OrderStatus.provisioned)
+        .order_by(Order.created_at.desc())
+        .all()
+    )
+    plans = await asyncio.gather(*(_live_status_for_order(o) for o in orders))
+    return {"plans": list(plans)}

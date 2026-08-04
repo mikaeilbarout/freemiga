@@ -139,6 +139,18 @@ class Order(Base):
     customer = relationship("Customer", back_populates="orders")
     plan = relationship("Plan", back_populates="orders")
 
+    @property
+    def marzban_username(self) -> str:
+        """Each order gets its own independent Marzban account — never
+        derived from customer.username alone, or a second purchase would
+        collide with (and, via extend_vpn_user, get merged into) the
+        first. customer.username is strictly alphanumeric (see
+        SignupIn.username_ok), so it can never itself contain the "_"
+        this splits on — safe to reverse with str.split("_", 1)[0]
+        wherever a Marzban/marzban-guard username needs to be mapped back
+        to a Customer (see routers/integrations.py)."""
+        return f"{self.customer.username}_{self.id[:8]}"
+
 
 class TicketStatus(str, enum.Enum):
     open = "open"
