@@ -33,7 +33,7 @@ from app.schemas import (
     PlanUpdate,
     TicketAdminOut,
 )
-from app.services import email_gateway, marzban, telegram
+from app.services import email_gateway, marzban, marzban_guard, telegram
 from app.services.uploads import read_validated_image, save_image
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -288,6 +288,12 @@ async def ban_customer(customer_id: str, payload: BanIn, db: Session = Depends(g
             # Customer is still marked banned locally even if a given VPN
             # user doesn't exist anymore (e.g. deleted by hand in Marzban).
             pass
+        # marzban-guard tracks each account's status independently and
+        # never reads freemiga's database — without this push, a ban
+        # applied here would be invisible to marzban-guard's own
+        # dashboard/scoring, which would keep showing the account as
+        # active even though Marzban just disabled it above.
+        await marzban_guard.push_ban_status(order.marzban_username, banned=True, reason=payload.reason)
 
     if customer.telegram_chat_id:
         await telegram.send_message(
@@ -318,6 +324,7 @@ async def unban_customer(customer_id: str, db: Session = Depends(get_db)):
             await marzban.set_user_status(order.marzban_username, active=True)
         except Exception:
             pass
+        await marzban_guard.push_ban_status(order.marzban_username, banned=False, reason="")
 
     if customer.telegram_chat_id:
         await telegram.send_message(customer.telegram_chat_id, "✅ Your account suspension has been lifted.")
