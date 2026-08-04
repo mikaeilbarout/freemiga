@@ -4,7 +4,10 @@
 {%- if bing_verification %}
 <meta name="msvalidate.01" content="{{ bing_verification }}">
 {%- endif %}
-{%- if ga_measurement_id %}
+{#- no_ga (set by admin.html's render() call) keeps staff logins/actions in
+   the admin panel out of the public GA property — otherwise every visit
+   here would count as site traffic and skew real visitor analytics. #}
+{%- if ga_measurement_id and not no_ga %}
 <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_measurement_id }}"></script>
 <script>
   window.dataLayer = window.dataLayer || [];

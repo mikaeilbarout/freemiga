@@ -685,4 +685,4 @@ def blog_post_page(request: Request, slug: str):
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page(request: Request):
-    return render(request, "admin.html", force_lang="en")
+    return render(request, "admin.html", force_lang="en", no_ga=True)
