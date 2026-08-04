@@ -19,22 +19,24 @@ async def _notify(coro, description: str, order_id: str) -> None:
 async def _provision(order: Order, db) -> None:
     plan = order.plan
     customer = order.customer
+    marzban_username = order.marzban_username
     try:
-        if order.is_renewal:
-            result = await marzban.extend_vpn_user(
-                username=customer.username,
-                data_limit_gb=plan.data_limit_gb,
-                duration_days=plan.duration_days,
-            )
-        else:
-            result = await marzban.create_vpn_user(
-                username=customer.username,
-                data_limit_gb=plan.data_limit_gb,
-                duration_days=plan.duration_days,
-            )
+        # Always create — never extend an existing account. Every order is
+        # its own independent Marzban account (order.marzban_username is
+        # unique per order), specifically so that a customer buying a
+        # second, different plan gets a second, independent VPN account
+        # instead of that purchase's data/duration getting merged into
+        # whatever they already had. create_vpn_user's own 409 fallback
+        # still covers the narrow case of retrying a provisioning attempt
+        # for this exact order after a prior partial failure.
+        result = await marzban.create_vpn_user(
+            username=marzban_username,
+            data_limit_gb=plan.data_limit_gb,
+            duration_days=plan.duration_days,
+        )
         order.subscription_url = result["subscription_url"]
         order.status = OrderStatus.provisioned
-        logger.info("Provisioned VPN for order %s (customer %s)", order.id, customer.username)
+        logger.info("Provisioned VPN for order %s (marzban user %s)", order.id, marzban_username)
     except Exception:
         logger.exception("Failed to provision Marzban user for order %s", order.id)
         order.status = OrderStatus.failed
@@ -59,7 +61,7 @@ async def _provision(order: Order, db) -> None:
     db.commit()
 
     await _notify(
-        marzban_guard.push_device_limit(customer.username, plan.max_devices),
+        marzban_guard.push_device_limit(marzban_username, plan.max_devices),
         "marzban-guard device-limit push", order.id,
     )
 
