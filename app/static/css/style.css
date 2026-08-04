@@ -680,7 +680,17 @@ input:focus, textarea:focus, select:focus {
 .feature-card p { color: var(--text-dim); font-size: 13.5px; line-height: 1.7; }
 
 .steps { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
-.step-row { display: flex; gap: 18px; align-items: flex-start; padding: 20px 22px; }
+.step-row { position: relative; display: flex; gap: 18px; align-items: flex-start; padding: 20px 22px; }
+/* A short connector in the gap after each step (except the last) — cards
+   use a translucent .panel background, so a line drawn *behind* them to
+   fake a continuous timeline would bleed through instead of looking
+   hidden; a segment confined to the gap avoids that and still reads as
+   "step 1 leads to step 2 leads to step 3" instead of three disconnected
+   boxes, which is what this content actually is. */
+.step-row:not(:last-child)::after {
+  content: ''; position: absolute; inset-inline-start: 37px; top: 100%;
+  width: 2px; height: 14px; background: var(--border-strong);
+}
 .step-num {
   flex-shrink: 0; width: 32px; height: 32px; border-radius: 9px;
   background: var(--gradient); color: #05060a; font-weight: 700; font-size: 14px;
