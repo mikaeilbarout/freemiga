@@ -50,10 +50,10 @@
 <section class="section">
   <div class="card cta-band">
     <div>
-      <h2>{{ t('cta_band_h2') }}</h2>
-      <p>{{ t('cta_band_p') }}</p>
+      <h2>{{ t('cta_band_loggedin_h') if nav_user else t('cta_band_h2') }}</h2>
+      <p>{{ t('cta_band_loggedin_p') if nav_user else t('cta_band_p') }}</p>
     </div>
-    <a class="btn btn-primary" href="/signup">{{ t('cta_band_btn') }}</a>
+    <a class="btn btn-primary" href="{{ '/dashboard' if nav_user else '/signup' }}">{{ t('cta_band_loggedin_btn') if nav_user else t('cta_band_btn') }}</a>
   </div>
 </section>
 
