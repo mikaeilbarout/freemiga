@@ -16,10 +16,11 @@ import logging
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
+from app import i18n
 from app.config import settings
 from app.database import get_db
-from app.models import AdminAuditLog, Customer
-from app.schemas import MarzbanGuardStatusIn
+from app.models import AdminAuditLog, Customer, CustomerAlert
+from app.schemas import MarzbanGuardDeviceLimitWarningIn, MarzbanGuardStatusIn
 from app.services import telegram
 
 logger = logging.getLogger("integrations")
@@ -73,5 +74,30 @@ async def report_status(payload: MarzbanGuardStatusIn, db: Session = Depends(get
         else:
             text = "✅ Your account has been reinstated."
         await telegram.send_message(customer.telegram_chat_id, text)
+
+    return {"ok": True, "matched": True}
+
+
+@router.post("/device-limit-warning", dependencies=[Depends(_require_webhook_secret)])
+async def report_device_limit_warning(payload: MarzbanGuardDeviceLimitWarningIn, db: Session = Depends(get_db)):
+    """marzban-guard's soft alternative to /status for a device_limit-only
+    trigger (see that project's MitigationConfig.device_limit_warn_only):
+    no ban, no Marzban status change — just a heads-up the customer should
+    see. Stored as a CustomerAlert (shown in their dashboard) and, if
+    linked, sent over Telegram too. payload.reason carries marzban-guard's
+    own technical detector reason, which isn't customer-facing — the
+    stored/sent message is our own wording instead."""
+    base_username = payload.username.split("_", 1)[0]
+    customer = db.query(Customer).filter(Customer.username == base_username).first()
+    if not customer:
+        logger.info("Got marzban-guard device-limit warning for unknown username %s", payload.username)
+        return {"ok": True, "matched": False}
+
+    message = i18n.t(customer.language or "en", "device_limit_warning_msg")
+    db.add(CustomerAlert(customer_id=customer.id, message=message))
+    db.commit()
+
+    if customer.telegram_chat_id:
+        await telegram.send_message(customer.telegram_chat_id, message)
 
     return {"ok": True, "matched": True}

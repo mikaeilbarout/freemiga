@@ -12,9 +12,10 @@ from app.auth import get_current_customer, hash_password, verify_password
 from app.database import get_db
 from app.lang import get_lang
 from app.limiter import limiter
-from app.models import Customer, EmailVerificationToken, Order, OrderStatus, PasswordResetCode
+from app.models import Customer, CustomerAlert, EmailVerificationToken, Order, OrderStatus, PasswordResetCode
 from app.schemas import (
     ChangePasswordIn,
+    CustomerAlertOut,
     CustomerOut,
     DeleteAccountIn,
     LoginIn,
@@ -118,6 +119,30 @@ def logout(request: Request):
 @router.get("/me", response_model=CustomerOut)
 def me(customer: Customer = Depends(get_current_customer)):
     return customer
+
+
+@router.get("/me/alerts", response_model=list[CustomerAlertOut])
+def my_alerts(customer: Customer = Depends(get_current_customer), db: Session = Depends(get_db)):
+    return (
+        db.query(CustomerAlert)
+        .filter(CustomerAlert.customer_id == customer.id, CustomerAlert.read_at.is_(None))
+        .order_by(CustomerAlert.created_at.desc())
+        .all()
+    )
+
+
+@router.post("/me/alerts/{alert_id}/dismiss")
+def dismiss_alert(alert_id: str, customer: Customer = Depends(get_current_customer), db: Session = Depends(get_db)):
+    alert = (
+        db.query(CustomerAlert)
+        .filter(CustomerAlert.id == alert_id, CustomerAlert.customer_id == customer.id)
+        .first()
+    )
+    if not alert:
+        raise HTTPException(404, "Alert not found")
+    alert.read_at = datetime.utcnow()
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/accept-terms", response_model=CustomerOut)

@@ -285,6 +285,22 @@ class MarzbanGuardStatusIn(BaseModel):
     reason: str = ""
 
 
+class MarzbanGuardDeviceLimitWarningIn(BaseModel):
+    username: str
+    reason: str = ""
+
+
+# ---- Customer alerts ----
+
+class CustomerAlertOut(BaseModel):
+    id: str
+    message: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # ---- Blog ----
 
 class BlogCategoryOut(BaseModel):

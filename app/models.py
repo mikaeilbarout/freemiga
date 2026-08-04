@@ -16,7 +16,10 @@ class Customer(Base):
     __tablename__ = "customers"
 
     id = Column(String, primary_key=True, default=gen_id)
-    username = Column(String, unique=True, nullable=False)  # also the Marzban username
+    # NOT the Marzban username — each order has its own, derived from this
+    # plus the order id (see Order.marzban_username), so that a customer's
+    # separate plans never collide or merge into one shared VPN account.
+    username = Column(String, unique=True, nullable=False)
     # Nullable only for accounts created before the bot started collecting
     # email at signup — those were grandfathered in as email_verified=True
     # (a live chat_id was their trust signal instead). New signups, whether
@@ -47,6 +50,7 @@ class Customer(Base):
 
     orders = relationship("Order", back_populates="customer")
     tickets = relationship("SupportTicket", back_populates="customer")
+    alerts = relationship("CustomerAlert", back_populates="customer")
 
 
 class PasswordResetCode(Base):
@@ -150,6 +154,25 @@ class Order(Base):
         wherever a Marzban/marzban-guard username needs to be mapped back
         to a Customer (see routers/integrations.py)."""
         return f"{self.customer.username}_{self.id[:8]}"
+
+
+class CustomerAlert(Base):
+    """A short, dismissible notice surfaced in the customer's own dashboard
+    (and, if they've linked Telegram, sent there too) — currently only
+    produced by the marzban-guard device-limit warning webhook (see
+    routers/integrations.py), but generic enough for future notice types.
+    Never auto-deleted, so a customer's alert history stays intact even
+    after they dismiss (read) one."""
+
+    __tablename__ = "customer_alerts"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    customer_id = Column(String, ForeignKey("customers.id"), nullable=False)
+    message = Column(String, nullable=False)
+    read_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    customer = relationship("Customer", back_populates="alerts")
 
 
 class TicketStatus(str, enum.Enum):

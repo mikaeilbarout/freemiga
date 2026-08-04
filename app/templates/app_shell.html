@@ -84,6 +84,11 @@
     display: none; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   }
   .promo-notice strong { color: var(--success); }
+  .device-alert-notice {
+    background: var(--warning-soft); border: 1px solid rgba(251,191,36,0.35); color: #ffe6a8;
+    border-radius: var(--radius); padding: 16px 20px; margin-bottom: 12px; font-size: 13.5px; line-height: 1.7;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
 
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(5,6,10,0.72); backdrop-filter: blur(4px);
@@ -240,6 +245,7 @@
         <span>{{ t('dashboard_verify_pre') }} <a href="/account" class="nav-section-link" data-section="account" style="color:inherit;font-weight:700">{{ t('dashboard_verify_link') }}</a> {{ t('dashboard_verify_post') }}</span>
       </div>
       <div class="ban-notice" id="banNoticeOverview"></div>
+      <div id="deviceAlertsContainer"></div>
       <div class="promo-notice" id="promoNotice">
         <span>🎁 <strong id="promoText"></strong></span>
         <a class="btn btn-primary btn-sm" id="promoCta" href="/billing">{{ t('promo_claim_btn') }}</a>
@@ -556,6 +562,7 @@ const DASH_I18N = {
   welcome: {{ t('dashboard_welcome', username='__USER__')|tojson }},
   banMessage: {{ t('dashboard_ban_message', reason='__REASON__')|tojson }},
   banUnspecified: {{ t('dashboard_ban_reason_unspecified')|tojson }},
+  alertsDismiss: {{ t('dashboard_alerts_dismiss')|tojson }},
   statusActive: {{ t('dashboard_status_active', name='__NAME__')|tojson }},
   statusActivePlan: {{ t('dashboard_status_active_plan')|tojson }},
   statusRenews: {{ t('dashboard_status_renews', date='__DATE__')|tojson }},
@@ -628,6 +635,29 @@ async function loadMeDashboard() {
     const ban = document.getElementById('banNoticeOverview');
     ban.style.display = 'block';
     ban.innerHTML = DASH_I18N.banMessage.replace('__REASON__', escapeHtml(me.ban_reason || DASH_I18N.banUnspecified));
+  }
+}
+
+async function loadAlerts() {
+  const res = await fetch('/api/auth/me/alerts');
+  if (!res.ok) return;
+  const alerts = await res.json();
+  const container = document.getElementById('deviceAlertsContainer');
+  container.innerHTML = alerts.map(a => `
+    <div class="device-alert-notice" data-alert-id="${a.id}">
+      <span>${escapeHtml(a.message)}</span>
+      <button class="btn btn-ghost btn-sm" onclick="dismissAlert('${a.id}', this)">${DASH_I18N.alertsDismiss}</button>
+    </div>
+  `).join('');
+}
+
+async function dismissAlert(id, btn) {
+  btn.disabled = true;
+  try {
+    await fetch(`/api/auth/me/alerts/${id}/dismiss`, { method: 'POST' });
+  } finally {
+    const notice = btn.closest('.device-alert-notice');
+    if (notice) notice.remove();
   }
 }
 
@@ -806,6 +836,7 @@ async function loadRecentOrders() {
 }
 
 loadMeDashboard();
+loadAlerts();
 loadStatus();
 loadRecentOrders();
 

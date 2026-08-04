@@ -60,8 +60,16 @@ async def _provision(order: Order, db) -> None:
 
     db.commit()
 
+    # +1 over the plan's own advertised limit: marzban-guard's device count
+    # is a distinct-client-IP proxy, not a real device count, so ordinary
+    # network roaming (Wi-Fi/cellular handoff, a carrier IP rotating
+    # mid-session) can look like one extra "device" for a customer who
+    # only ever uses exactly their allowed number of devices. This buys
+    # that margin back without loosening what the plan is actually sold
+    # as. None (no configured limit) stays None — nothing to add 1 to.
+    guard_device_limit = plan.max_devices + 1 if plan.max_devices is not None else None
     await _notify(
-        marzban_guard.push_device_limit(marzban_username, plan.max_devices),
+        marzban_guard.push_device_limit(marzban_username, guard_device_limit),
         "marzban-guard device-limit push", order.id,
     )
 
