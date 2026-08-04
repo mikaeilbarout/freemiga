@@ -129,6 +129,17 @@
   .order-row a.pay-link { color: var(--accent-2); font-weight: 600; margin-inline-start: 10px; }
   .empty-state { color: var(--text-faint); font-size: 13px; padding: 6px 0; }
 
+  /* #plans clips at a fixed height (overflow-y: auto) once there are more
+     plans than fit — with a long list, that cutoff landed mid-row with no
+     visual cue it was scrollable, reading as a rendering glitch rather
+     than "scroll for more". This wrapper + fade makes the cutoff legible
+     as intentional. */
+  .plans-scroll-wrap { position: relative; }
+  .plans-scroll-wrap::after {
+    content: ''; position: absolute; inset-inline: 0; bottom: 0; height: 32px;
+    background: linear-gradient(to bottom, transparent, var(--bg));
+    pointer-events: none;
+  }
   #plans {
     max-height: 380px; overflow-y: auto; padding-inline-end: 6px;
   }
@@ -300,7 +311,9 @@
         </div>
         <div class="accordion-body">
           <div class="accordion-body-inner">
-            <div id="plans"></div>
+            <div class="plans-scroll-wrap">
+              <div id="plans"></div>
+            </div>
             <label class="terms-notice" id="termsCheckboxRow" for="termsCheckbox">
               <input type="checkbox" class="terms-checkbox" id="termsCheckbox" onchange="onTermsCheckboxChange()">
               <span class="terms-notice-text">{{ t('terms_agree_checkbox')|safe }}</span>
