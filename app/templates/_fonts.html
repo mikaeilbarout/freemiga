@@ -8,12 +8,31 @@
    the admin panel out of the public GA property — otherwise every visit
    here would count as site traffic and skew real visitor analytics. #}
 {%- if ga_measurement_id and not no_ga %}
-<script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_measurement_id }}"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
   gtag('config', {{ ga_measurement_id|tojson }});
+  // gtag.js itself is ~160KB — fetching/parsing/executing it during the
+  // page's first paint competed with actually-critical resources (fonts,
+  // CSS) for bandwidth and main-thread time, for nothing visible in
+  // return (see the Lighthouse "reduce unused JavaScript" finding).
+  // Deferred to the 'load' event instead of a plain <script async> tag:
+  // gtag()/dataLayer are already defined above so anything that calls
+  // gtag() before this fires still queues correctly, and 'load' happens
+  // within milliseconds of first paint on any real visit, so this costs
+  // essentially no measurement accuracy.
+  function _loadGtagScript() {
+    const s = document.createElement('script');
+    s.async = true;
+    s.src = "https://www.googletagmanager.com/gtag/js?id={{ ga_measurement_id }}";
+    document.head.appendChild(s);
+  }
+  if (document.readyState === 'complete') {
+    _loadGtagScript();
+  } else {
+    window.addEventListener('load', _loadGtagScript);
+  }
 </script>
 {%- endif %}
 <link rel="preconnect" href="https://fonts.googleapis.com">

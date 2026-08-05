@@ -225,7 +225,20 @@ function showBanner(i, total) {
   document.querySelectorAll('.banner-dot').forEach(el => el.classList.toggle('active', parseInt(el.dataset.i) === i));
 }
 
-loadBanners();
+// The promo carousel is below the fold and starts hidden either way (see
+// #bannerCarousel's display:none) — fetching it during the initial load
+// window was showing up in Lighthouse's critical-request chain competing
+// with actually-critical resources for no visible benefit. Deferred to
+// 'load' + idle time instead so it never contends with first paint.
+function _scheduleLoadBanners() {
+  if ('requestIdleCallback' in window) requestIdleCallback(loadBanners, {timeout: 2000});
+  else setTimeout(loadBanners, 200);
+}
+if (document.readyState === 'complete') {
+  _scheduleLoadBanners();
+} else {
+  window.addEventListener('load', _scheduleLoadBanners);
+}
 </script>
 </body>
 </html>
