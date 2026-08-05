@@ -817,10 +817,31 @@ async function loadStatus() {
   document.getElementById('statusHeroList').innerHTML = cards.length ? cards.join('') : renderEmptyStatusCard();
 }
 
+// order.status only ever tracks the purchase lifecycle (paid, provisioned,
+// ...) — it never reflects a plan running out of data/time after the fact,
+// so a "provisioned" order stays "provisioned" (and, with the plain
+// statusBadgeDash() below, shows a green "Active" badge) forever, even
+// long after Marzban has actually cut it off. That's exactly the live
+// status the "Overview" cards above already check via vpn-status/me — this
+// reuses the same data so Recent Orders can't contradict them.
+function statusBadgeDashLive(order, liveByOrderId) {
+  if (order.status !== 'provisioned') return statusBadgeDash(order.status);
+  const live = liveByOrderId[order.id];
+  if (!live || !live.has_account || live.unreachable) return statusBadgeDash(order.status);
+  if (live.marzban_status === 'active') {
+    return `<span class="badge badge-success">${DASH_I18N.badgeActive}</span>`;
+  }
+  return `<span class="badge badge-danger">${DASH_I18N.badgeDeactivated}</span>`;
+}
+
 async function loadRecentOrders() {
-  const [ordersRes, meRes] = await Promise.all([fetch('/api/orders'), fetch('/api/auth/me')]);
+  const [ordersRes, meRes, vpnRes] = await Promise.all([
+    fetch('/api/orders'), fetch('/api/auth/me'), fetch('/api/orders/vpn-status/me'),
+  ]);
   const orders = await ordersRes.json();
   const banned = meRes.ok ? !!(await meRes.json()).is_banned : false;
+  const vpn = vpnRes.ok ? await vpnRes.json() : { plans: [] };
+  const liveByOrderId = Object.fromEntries((vpn.plans || []).map(p => [p.order_id, p]));
   const container = document.getElementById('recentOrders');
   if (!orders.length) { container.innerHTML = `<div class="empty-state">${DASH_I18N.noOrders}</div>`; return; }
   container.innerHTML = orders.slice(0, 3).map(o => `
@@ -830,7 +851,7 @@ async function loadRecentOrders() {
         ${o.status === 'pending' ? `<a class="pay-link" href="/pay/${o.id}">${DASH_I18N.payNow}</a>` : ''}
         ${!banned && o.status === 'provisioned' && o.subscription_url ? `<button class="btn btn-ghost btn-sm" style="margin-inline-start:8px" data-link="${o.subscription_url}" onclick="copyOrderLink(this)">${DASH_I18N.copyLink}</button>` : ''}
       </div>
-      ${statusBadgeDash(o.status)}
+      ${statusBadgeDashLive(o, liveByOrderId)}
     </div>
   `).join('');
 }
