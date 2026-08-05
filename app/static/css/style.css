@@ -586,18 +586,9 @@ input:focus, textarea:focus, select:focus {
   gap: 20px;
   max-width: 720px;
   margin: 0 auto;
-  /* Reserves the space a full page (6 cards, the pagination size) will
-     occupy so the loading -> loaded swap (plans arrive via a client-side
-     fetch) doesn't shift everything below it — measured directly against
-     6 real rendered cards, not guessed: an earlier, lower guess (560px)
-     was still a measured ~240px short and left a real, Lighthouse-flagged
-     CLS regression on desktop. A page with fewer cards (e.g. the last,
-     partial page) just leaves extra room below — min-height never
-     shrinks the box, so that costs nothing in shift either way. */
-  min-height: 1220px;
 }
 @media (max-width: 640px) {
-  .plans-grid { grid-template-columns: minmax(0, 1fr); max-width: 420px; min-height: 2440px; }
+  .plans-grid { grid-template-columns: minmax(0, 1fr); max-width: 420px; }
 }
 .plan-card {
   position: relative;
