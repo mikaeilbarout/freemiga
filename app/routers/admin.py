@@ -27,6 +27,7 @@ from app.schemas import (
     BanIn,
     CustomerAdminOut,
     GrantPlanIn,
+    MarzbanGuardStatusOut,
     OrderAdminOut,
     PlanCreate,
     PlanOut,
@@ -257,6 +258,7 @@ def list_orders(
             is_renewal=o.is_renewal,
             expires_at=o.expires_at,
             created_at=o.created_at,
+            marzban_username=o.marzban_username if o.status == OrderStatus.provisioned else None,
         )
         for o in orders
     ]
@@ -407,6 +409,69 @@ async def manually_confirm_order(order_id: str, db: Session = Depends(get_db)):
     _log_action(db, "manual_confirm_order", order_id)
     await _provision(order, db)
     return {"ok": True, "status": order.status}
+
+
+@router.get(
+    "/orders/{order_id}/marzban-guard-status",
+    response_model=MarzbanGuardStatusOut,
+    dependencies=[Depends(require_admin)],
+)
+async def order_marzban_guard_status(order_id: str, db: Session = Depends(get_db)):
+    """marzban-guard enforces device-limit/abuse restrictions independently
+    of freemiga's own ban flag — it can suspend/disable/blacklist an
+    account on its own, invisibly to this admin panel, unless we ask it
+    directly. This is that ask."""
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if order.status != OrderStatus.provisioned:
+        raise HTTPException(400, "Order has no provisioned Marzban account")
+    if not marzban_guard.is_configured():
+        return MarzbanGuardStatusOut(configured=False, reachable=False)
+
+    data = await marzban_guard.get_status(order.marzban_username)
+    if data is None:
+        return MarzbanGuardStatusOut(configured=True, reachable=False)
+    return MarzbanGuardStatusOut(
+        configured=True,
+        reachable=True,
+        username=data.get("username"),
+        status=data.get("status"),
+        status_reason=data.get("status_reason"),
+        risk_score=data.get("risk_score"),
+        last_seen_at=data.get("last_seen_at"),
+    )
+
+
+@router.post(
+    "/orders/{order_id}/marzban-guard-reactivate",
+    dependencies=[Depends(require_admin)],
+)
+async def order_marzban_guard_reactivate(order_id: str, db: Session = Depends(get_db)):
+    """Clears a restriction marzban-guard applied on its own (device-limit
+    abuse, port-scan detection, etc.) — separate from freemiga's own
+    ban/unban, which stays untouched here. Deliberately goes through
+    marzban-guard's own override endpoint rather than suggesting a direct
+    Marzban-panel reactivation: bypassing marzban-guard that way leaves its
+    internal tracked status stuck at whatever level it was (often
+    blacklisted, the maximum), which silently disables future detection
+    for that account since nothing can register as "worse" than what's
+    already stored — see services/marzban_guard.py."""
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if order.status != OrderStatus.provisioned:
+        raise HTTPException(400, "Order has no provisioned Marzban account")
+    if not marzban_guard.is_configured():
+        raise HTTPException(400, "marzban-guard is not configured")
+
+    ok = await marzban_guard.push_ban_status(
+        order.marzban_username, banned=False, reason="Reactivated from freemiga admin panel"
+    )
+    if not ok:
+        raise HTTPException(502, "marzban-guard did not confirm the reactivation")
+    _log_action(db, "marzban_guard_reactivate", order_id)
+    return {"ok": True}
 
 
 @router.get("/audit-log", dependencies=[Depends(require_admin)])

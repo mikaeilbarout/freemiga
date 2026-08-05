@@ -257,6 +257,22 @@ class OrderAdminOut(BaseModel):
     is_renewal: bool
     expires_at: datetime
     created_at: datetime
+    # Only set for provisioned orders — that's the only time a real Marzban
+    # account (and thus a marzban-guard-tracked one) exists for this order.
+    marzban_username: Optional[str] = None
+
+
+class MarzbanGuardStatusOut(BaseModel):
+    """marzban-guard tracks this independently of freemiga's own is_banned
+    flag — see app/services/marzban_guard.py. configured=False means
+    MARZBAN_GUARD_BASE_URL isn't set, not that the account is unprotected."""
+    configured: bool
+    reachable: bool
+    username: Optional[str] = None
+    status: Optional[str] = None
+    status_reason: Optional[str] = None
+    risk_score: Optional[float] = None
+    last_seen_at: Optional[datetime] = None
 
 
 class TicketAdminOut(BaseModel):

@@ -43,6 +43,33 @@ async def push_device_limit(username: str, max_devices: int | None) -> None:
         logger.exception("Error pushing device limit for %s to marzban-guard", username)
 
 
+async def get_status(username: str) -> dict | None:
+    """Read side of the integration, used by the admin panel to show what
+    marzban-guard currently thinks about an account (status/score/reason)
+    without needing SSH access to marzban-guard's own server. Returns None
+    on any failure (not configured, unreachable, account not yet tracked)
+    — the caller renders that as "unknown", never as a hard error, since
+    this is a read-only convenience, not something provisioning depends on.
+    """
+    if not is_configured():
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{settings.MARZBAN_GUARD_BASE_URL}/api/v1/admin/users/{username}",
+                headers={"Authorization": f"Bearer {settings.MARZBAN_GUARD_ADMIN_API_KEY}"},
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.warning(
+                "Failed to fetch marzban-guard status for %s: %s %s", username, resp.status_code, resp.text
+            )
+            return None
+    except Exception:
+        logger.exception("Error fetching marzban-guard status for %s", username)
+        return None
+
+
 async def push_ban_status(username: str, banned: bool, reason: str) -> None:
     """Admin-initiated ban/unban (routers/admin.py) calls Marzban directly
     to actually cut off access, but marzban-guard tracks its own
@@ -58,9 +85,12 @@ async def push_ban_status(username: str, banned: bool, reason: str) -> None:
     Best-effort, same as push_device_limit: marzban-guard staying in sync
     is a dashboard/scoring-accuracy concern, not something that should be
     allowed to block a ban/unban that's already been applied to the real
-    VPN account."""
+    VPN account. Returns whether the push actually succeeded — existing
+    callers (ban_customer/unban_customer) ignore it, since for them it's
+    genuinely best-effort; the admin-panel "reactivate" action uses it to
+    tell the admin whether marzban-guard actually cleared the block."""
     if not is_configured():
-        return
+        return False
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
@@ -77,5 +107,8 @@ async def push_ban_status(username: str, banned: bool, reason: str) -> None:
                     "Failed to push ban status for %s to marzban-guard: %s %s",
                     username, resp.status_code, resp.text,
                 )
+                return False
+            return True
     except Exception:
         logger.exception("Error pushing ban status for %s to marzban-guard", username)
+        return False

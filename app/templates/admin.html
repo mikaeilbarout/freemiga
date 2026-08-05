@@ -445,12 +445,86 @@ function orderRowHtml(o) {
       </div>
       <div class="lr-right">
         <span class="badge ${o.status === 'provisioned' ? 'badge-success' : o.status === 'pending' ? 'badge-warning' : 'badge-danger'}">${statusLabel(o.status)}</span>
-        ${(o.status === 'pending' || o.status === 'failed') && o.payment_method === 'crypto'
-          ? `<div class="lr-actions"><button class="btn btn-ghost btn-sm" onclick="confirmOrder('${o.id}')">Confirm manually</button></div>`
-          : ''}
+        <div class="lr-actions">
+          ${(o.status === 'pending' || o.status === 'failed') && o.payment_method === 'crypto'
+            ? `<button class="btn btn-ghost btn-sm" onclick="confirmOrder('${o.id}')">Confirm manually</button>`
+            : ''}
+          ${o.status === 'provisioned' && o.marzban_username
+            ? `<button class="btn btn-ghost btn-sm" onclick="toggleGuardPanel('${o.id}')">VPN Guard</button>`
+            : ''}
+        </div>
       </div>
     </div>
+    ${o.status === 'provisioned' && o.marzban_username ? `
+      <div class="new-plan-card" id="guardPanel-${o.id}" style="display:none; margin-top:10px; padding-top:12px; border-top:1px solid var(--border, #333)">
+        <div id="guardPanelBody-${o.id}">Loading…</div>
+      </div>
+    ` : ''}
   `;
+}
+
+const guardPanelLoaded = new Set();
+
+function guardStatusBadgeClass(status) {
+  return status === 'active' ? 'badge-success' : status === 'suspended' ? 'badge-warning' : 'badge-danger';
+}
+
+function guardPanelHtml(orderId, data) {
+  if (!data.configured) {
+    return `<div class="row-meta">marzban-guard isn't configured on this server (MARZBAN_GUARD_BASE_URL unset).</div>`;
+  }
+  if (!data.reachable) {
+    return `
+      <div class="row-meta" style="color:var(--danger)">Couldn't reach marzban-guard right now — try again shortly.</div>
+      <button class="btn btn-ghost btn-sm" onclick="loadGuardStatus('${orderId}', true)" style="margin-top:8px">Retry</button>
+    `;
+  }
+  const canReactivate = data.status && data.status !== 'active';
+  return `
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+      <span class="badge ${guardStatusBadgeClass(data.status)}">${escapeHtml(data.status || 'unknown')}</span>
+      <span class="row-meta">score: ${data.risk_score != null ? Math.round(data.risk_score) : '—'}</span>
+      <span class="row-meta">last seen: ${data.last_seen_at ? new Date(data.last_seen_at).toLocaleString('en-US') : '—'}</span>
+    </div>
+    ${data.status_reason ? `<div class="row-meta" style="margin-top:6px">Reason: ${escapeHtml(data.status_reason)}</div>` : ''}
+    ${canReactivate
+      ? `<button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="reactivateGuard('${orderId}')">Reactivate</button>`
+      : ''}
+  `;
+}
+
+async function loadGuardStatus(orderId, force = false) {
+  const body = document.getElementById(`guardPanelBody-${orderId}`);
+  if (!body) return;
+  if (force) guardPanelLoaded.delete(orderId);
+  body.innerHTML = 'Loading…';
+  const res = await fetch(`/api/admin/orders/${orderId}/marzban-guard-status`);
+  if (!res.ok) {
+    body.innerHTML = `<div class="row-meta" style="color:var(--danger)">Couldn't load status.</div>`;
+    return;
+  }
+  const data = await res.json();
+  body.innerHTML = guardPanelHtml(orderId, data);
+  guardPanelLoaded.add(orderId);
+}
+
+function toggleGuardPanel(orderId) {
+  const el = document.getElementById(`guardPanel-${orderId}`);
+  const opening = el.style.display === 'none';
+  el.style.display = opening ? 'block' : 'none';
+  if (opening && !guardPanelLoaded.has(orderId)) loadGuardStatus(orderId);
+}
+
+async function reactivateGuard(orderId) {
+  if (!confirm('Reactivate this account in marzban-guard? Only do this if you\'ve verified the restriction was a mistake.')) return;
+  const res = await fetch(`/api/admin/orders/${orderId}/marzban-guard-reactivate`, {method: 'POST'});
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    showToast(data.detail || 'Could not reactivate this account.', 'error');
+    return;
+  }
+  showToast('Account reactivated in marzban-guard.', 'success');
+  loadGuardStatus(orderId, true);
 }
 
 async function loadOrders(reset = true) {
