@@ -483,7 +483,13 @@ function guardPanelHtml(orderId, data) {
       <button class="btn btn-ghost btn-sm" onclick="loadGuardStatus('${orderId}', true)" style="margin-top:8px">Retry</button>
     `;
   }
-  const canReactivate = data.status && data.status !== 'active';
+  if (!data.status) {
+    // marzban-guard only creates a record once a detector actually
+    // triggers on this account — no status back means it's simply never
+    // been flagged, not that something's wrong.
+    return `<div class="row-meta"><span class="badge badge-success">clean</span> No violations recorded — this account has never triggered marzban-guard.</div>`;
+  }
+  const canReactivate = data.status !== 'active';
   return `
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
       <span class="badge ${guardStatusBadgeClass(data.status)}">${escapeHtml(data.status || 'unknown')}</span>

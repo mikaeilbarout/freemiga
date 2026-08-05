@@ -46,10 +46,22 @@ async def push_device_limit(username: str, max_devices: int | None) -> None:
 async def get_status(username: str) -> dict | None:
     """Read side of the integration, used by the admin panel to show what
     marzban-guard currently thinks about an account (status/score/reason)
-    without needing SSH access to marzban-guard's own server. Returns None
-    on any failure (not configured, unreachable, account not yet tracked)
-    — the caller renders that as "unknown", never as a hard error, since
-    this is a read-only convenience, not something provisioning depends on.
+    without needing SSH access to marzban-guard's own server.
+
+    Returns:
+      - a status dict on 200
+      - {} (empty dict, NOT None) on 404 — marzban-guard only creates a
+        row for a username once a detector actually triggers on it, so a
+        clean account that's never been flagged genuinely doesn't exist
+        there yet. That's a normal "nothing to report" outcome, not a
+        failure, and must be told apart from a real unreachable/error
+        case — conflating the two here previously showed "couldn't
+        reach marzban-guard" for perfectly healthy, simply-never-flagged
+        accounts.
+      - None on any real failure (not configured, unreachable, timeout,
+        non-200/404 response) — the caller renders that as an actual
+        error, since this is a read-only convenience, not something
+        order provisioning depends on.
     """
     if not is_configured():
         return None
@@ -61,6 +73,8 @@ async def get_status(username: str) -> dict | None:
             )
             if resp.status_code == 200:
                 return resp.json()
+            if resp.status_code == 404:
+                return {}
             logger.warning(
                 "Failed to fetch marzban-guard status for %s: %s %s", username, resp.status_code, resp.text
             )
