@@ -321,6 +321,14 @@ def robots_txt():
         "Disallow: /admin",
         "Disallow: /api/",
         "Disallow: /set-language",
+        # Transactional/utility pages, same reasoning as the ones above —
+        # no unique content to rank on, and none currently emit a meta
+        # description (see _seo_head.html) since they were never meant to
+        # be indexed. Marketing/conversion content lives on /plans and the
+        # home page, which link to these, not the other way around.
+        "Disallow: /login",
+        "Disallow: /signup",
+        "Disallow: /forgot-password",
         "",
         f"Sitemap: {site}/sitemap.xml",
     ]
