@@ -429,13 +429,22 @@ def plans_page_localized(request: Request, lang: str):
     db = SessionLocal()
     try:
         active_plans = db.query(Plan).filter(Plan.is_active == True).order_by(Plan.price_usdt).all()  # noqa: E712
-        # Detach from the session before it closes — the template only
-        # reads plain attributes (name, price_usdt), no lazy relationships.
-        for p in active_plans:
-            db.expunge(p)
+        # Plain dicts, not ORM objects: the template renders the plan cards
+        # server-side (for SEO/no-JS reliability — see plans_page.html) AND
+        # embeds this same list as JSON for the client-side pagination
+        # script, so it needs to be both Jinja-attribute-accessible and
+        # JSON-serializable without any extra conversion in the template.
+        plans = [
+            {
+                "id": p.id, "name": p.name, "price_usdt": p.price_usdt,
+                "data_limit_gb": p.data_limit_gb, "duration_days": p.duration_days,
+                "max_devices": p.max_devices,
+            }
+            for p in active_plans
+        ]
     finally:
         db.close()
-    return _localized(request, lang, "plans_page.html", plans_for_schema=active_plans)
+    return _localized(request, lang, "plans_page.html", plans=plans)
 
 
 @app.get("/{lang}/how-it-works", response_class=HTMLResponse)

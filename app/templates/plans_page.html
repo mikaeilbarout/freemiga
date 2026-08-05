@@ -8,7 +8,7 @@
 {% set seo_title = t('seo_plans_title') %}
 {% set seo_description = t('seo_plans_description') %}
 {% set breadcrumb_label = t('nav_plans') %}
-{% set plans_for_schema = plans_for_schema if plans_for_schema is defined else [] %}
+{% set plans_for_schema = plans %}
 {% include "_seo_head.html" %}
 </head>
 <body>
@@ -22,9 +22,40 @@
   <p class="lead fade-up" style="animation-delay:.08s">{{ t('plans_hero_p') }}</p>
 </header>
 
+{% set check_svg %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>{% endset %}
+{% set paid_plans = plans | selectattr('price_usdt', 'gt', 0) | list %}
+{% set featured = (paid_plans | sort(attribute='price_usdt', reverse=True) | first) if paid_plans else none %}
+{% set featured_id = featured.id if featured else none %}
+{% set plans_page_size = 6 %}
+
 <section class="section">
   <div class="plans-grid" id="plansGrid">
-    <div class="plans-empty">{{ t('plans_loading') }}</div>
+    {% if plans %}
+      {% for p in plans[:plans_page_size] %}
+      <div class="card plan-card{{ ' featured' if p.id == featured_id else '' }}{{ ' free-trial' if p.price_usdt == 0 else '' }}">
+        {% if p.id == featured_id %}<div class="tag-featured">{{ t('plan_best_value') }}</div>{% endif %}
+        {% if p.price_usdt == 0 %}<div class="tag-free">{{ t('free_trial_tag') }}</div>{% endif %}
+        <div class="plan-name">{{ p.name }}</div>
+        <div class="plan-price">{{ t('price_free') if p.price_usdt == 0 else '$' ~ p.price_usdt }}<span> / {{ p.duration_days }} days</span></div>
+        <div class="plan-meta">
+          {%- if p.price_usdt == 0 -%}
+            {{ t('plan_free_billing') }}
+          {%- else -%}
+            {{ t('plan_billed_once') }} · {{ t('plan_per_gb', price='%.2f'|format(p.price_usdt / p.data_limit_gb)) }}
+          {%- endif -%}
+        </div>
+        <ul class="plan-features">
+          <li>{{ check_svg }} {{ t('plan_data_allowance', gb=p.data_limit_gb) }}</li>
+          <li>{{ check_svg }} {{ t('plan_validity', days=p.duration_days) }}</li>
+          <li>{{ check_svg }} {{ t('plan_full_access') }}</li>
+          {% if p.max_devices %}<li>{{ check_svg }} {{ t('plan_device_limit', n=p.max_devices) }}</li>{% endif %}
+        </ul>
+        <a class="btn {{ 'btn-primary' if p.id == featured_id else 'btn-ghost' }} btn-block" href="{{ '/billing' if nav_user else '/signup' }}?plan={{ p.id }}">{{ t('claim_free_plan') if p.price_usdt == 0 else t('plan_choose', name=p.name) }}</a>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="plans-empty">{{ t('plans_empty') }}</div>
+    {% endif %}
   </div>
   <div class="plans-pagination" id="plansPagination" style="display:none">
     <button class="plans-pagination-btn" id="plansPrevBtn" onclick="changePlansPage(-1)" aria-label="{{ t('plans_prev') }}">
@@ -66,12 +97,15 @@ const PLANS_I18N = {
   claimFree: {{ t('claim_free_plan')|tojson }},
   priceFree: {{ t('price_free')|tojson }},
   empty: {{ t('plans_empty')|tojson }},
-  loadError: {{ t('plans_load_error')|tojson }},
   pageOf: {{ t('plans_page_of', current='__CUR__', total='__TOT__')|tojson }},
 };
 
 const PLANS_PAGE_SIZE = 6;
-let allPlans = [];
+// The first page is already in the HTML the server sent (see the Jinja
+// loop above) — this is only for client-side pagination past page 1, so
+// a crawler or a user whose JS never runs still sees real plan content,
+// not a "Loading…" placeholder that depends on /api/plans succeeding.
+let allPlans = {{ plans|tojson }};
 let currentPlansPage = 0;
 const isLoggedIn = {{ 'true' if nav_user else 'false' }};
 
@@ -93,6 +127,27 @@ function planFeatures(p) {
   `;
 }
 
+function totalPlansPages() {
+  return Math.max(1, Math.ceil(allPlans.length / PLANS_PAGE_SIZE));
+}
+
+function updatePaginationControls() {
+  const pagination = document.getElementById('plansPagination');
+  if (allPlans.length <= PLANS_PAGE_SIZE) {
+    pagination.style.display = 'none';
+    return;
+  }
+  const totalPages = totalPlansPages();
+  pagination.style.display = 'flex';
+  document.getElementById('plansPrevBtn').disabled = currentPlansPage === 0;
+  document.getElementById('plansNextBtn').disabled = currentPlansPage >= totalPages - 1;
+  document.getElementById('plansPageIndicator').textContent =
+    PLANS_I18N.pageOf.replace('__CUR__', currentPlansPage + 1).replace('__TOT__', totalPages);
+}
+
+// Only called when navigating to a page other than the first — page 1 is
+// already server-rendered in the initial HTML (see the Jinja loop above),
+// so the plan listing itself is never blocked on this running at all.
 function renderPlansPage() {
   const grid = document.getElementById('plansGrid');
   const paidPlans = allPlans.filter(p => p.price_usdt > 0);
@@ -100,12 +155,11 @@ function renderPlansPage() {
     ? paidPlans.reduce((a, b) => (b.price_usdt > a.price_usdt ? b : a), paidPlans[0]).id
     : null;
 
-  const totalPages = Math.max(1, Math.ceil(allPlans.length / PLANS_PAGE_SIZE));
-  currentPlansPage = Math.min(currentPlansPage, totalPages - 1);
+  currentPlansPage = Math.min(currentPlansPage, totalPlansPages() - 1);
   const start = currentPlansPage * PLANS_PAGE_SIZE;
   const pagePlans = allPlans.slice(start, start + PLANS_PAGE_SIZE);
 
-  grid.innerHTML = pagePlans.map(p => {
+  grid.innerHTML = pagePlans.length ? pagePlans.map(p => {
     const isFree = p.price_usdt === 0;
     const isFeatured = p.id === featuredId;
     const perGbMeta = isFree
@@ -122,18 +176,9 @@ function renderPlansPage() {
       <a class="btn ${isFeatured ? 'btn-primary' : 'btn-ghost'} btn-block" href="${isLoggedIn ? '/billing' : '/signup'}?plan=${p.id}">${isFree ? PLANS_I18N.claimFree : PLANS_I18N.choose.replace('__NAME__', escapeHtml(p.name))}</a>
     </div>
   `;
-  }).join('');
+  }).join('') : `<div class="plans-empty">${PLANS_I18N.empty}</div>`;
 
-  const pagination = document.getElementById('plansPagination');
-  if (allPlans.length <= PLANS_PAGE_SIZE) {
-    pagination.style.display = 'none';
-  } else {
-    pagination.style.display = 'flex';
-    document.getElementById('plansPrevBtn').disabled = currentPlansPage === 0;
-    document.getElementById('plansNextBtn').disabled = currentPlansPage >= totalPages - 1;
-    document.getElementById('plansPageIndicator').textContent =
-      PLANS_I18N.pageOf.replace('__CUR__', currentPlansPage + 1).replace('__TOT__', totalPages);
-  }
+  updatePaginationControls();
 }
 
 function changePlansPage(delta) {
@@ -142,24 +187,7 @@ function changePlansPage(delta) {
   document.getElementById('plansGrid').scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 
-async function loadPlans() {
-  const grid = document.getElementById('plansGrid');
-  try {
-    const res = await fetch('/api/plans');
-    const plans = await res.json();
-    if (!plans.length) {
-      grid.innerHTML = `<div class="plans-empty">${PLANS_I18N.empty}</div>`;
-      return;
-    }
-    allPlans = plans;
-    currentPlansPage = 0;
-    renderPlansPage();
-  } catch (e) {
-    grid.innerHTML = `<div class="plans-empty">${PLANS_I18N.loadError}</div>`;
-  }
-}
-
-loadPlans();
+updatePaginationControls();
 </script>
 </body>
 </html>
