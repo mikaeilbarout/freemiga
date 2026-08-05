@@ -88,11 +88,20 @@ _CSP = (
     # nonce-based policy would need every inline handler rewritten to
     # addEventListener first; noted as follow-up work, not attempted here
     # given "never break existing functionality".
-    "script-src 'self' 'unsafe-inline'; "
+    # googletagmanager.com is gtag.js itself (see _fonts.html) — without
+    # it here, the browser silently blocks the script (a CSP violation
+    # logs to the console, nothing user-visible) and GA never receives a
+    # single hit no matter how correctly GA_MEASUREMENT_ID is set.
+    "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src 'self' https://fonts.gstatic.com; "
-    "img-src 'self' data:; "
-    "connect-src 'self'; "
+    "img-src 'self' data: https://www.googletagmanager.com; "
+    # Where gtag.js actually sends hit data — googletagmanager.com for its
+    # own config/collect calls, google-analytics.com (and its region1/2/...
+    # subdomains) for the GA4 collect endpoint itself. Without these,
+    # gtag.js loads fine but every measurement request it tries to send
+    # is blocked the same silent way.
+    "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com; "
     "object-src 'none'; "
     "base-uri 'self'; "
     "form-action 'self'; "
