@@ -1,6 +1,8 @@
+import asyncio
 import hmac
 from datetime import datetime, timedelta
 
+import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
@@ -210,8 +212,39 @@ def list_customers(
     }
 
 
+async def _order_real_status(marzban_username: str) -> tuple[str | None, str | None]:
+    """Best-effort live check backing the admin orders list's red
+    "deactivated" indicator. Order.status only ever tracks freemiga's own
+    purchase lifecycle (see OrderStatus) — it never reflects a plan
+    running out of data, its expiry date passing, or a restriction
+    applied directly against Marzban or marzban-guard after the account
+    was provisioned, all of which are checked here instead. Returns
+    (real_status, reason); (None, None) means either everything's fine or
+    a check couldn't complete (never raises — this must not break the
+    orders list if Marzban or marzban-guard is briefly unreachable).
+
+    Marzban is checked first and wins if it disagrees with marzban-guard:
+    it's the actual VPN server, so "expired"/"limited"/"disabled" there is
+    ground truth regardless of what marzban-guard separately thinks."""
+    try:
+        data = await marzban.get_vpn_user(marzban_username)
+        marzban_status = data.get("status")
+    except (httpx.HTTPStatusError, httpx.HTTPError):
+        marzban_status = None
+
+    if marzban_status and marzban_status != "active":
+        return marzban_status, f"Marzban: {marzban_status}"
+
+    guard_data = await marzban_guard.get_status(marzban_username)
+    guard_status = guard_data.get("status") if guard_data else None
+    if guard_status and guard_status != "active":
+        return guard_status, guard_data.get("status_reason") or f"marzban-guard: {guard_status}"
+
+    return None, None
+
+
 @router.get("/orders", dependencies=[Depends(require_admin)])
-def list_orders(
+async def list_orders(
     db: Session = Depends(get_db),
     status: str = "",
     q: str | None = None,
@@ -246,6 +279,14 @@ def list_orders(
         .limit(page_size)
         .all()
     )
+
+    # Only provisioned orders have a real Marzban account to check, and
+    # only this one page's worth — run concurrently so N orders costs one
+    # round-trip's worth of latency, not N of them stacked up.
+    provisioned = [o for o in orders if o.status == OrderStatus.provisioned]
+    real_statuses = await asyncio.gather(*(_order_real_status(o.marzban_username) for o in provisioned))
+    real_status_by_order_id = {o.id: rs for o, rs in zip(provisioned, real_statuses)}
+
     items = [
         OrderAdminOut(
             id=o.id,
@@ -259,6 +300,8 @@ def list_orders(
             expires_at=o.expires_at,
             created_at=o.created_at,
             marzban_username=o.marzban_username if o.status == OrderStatus.provisioned else None,
+            real_status=real_status_by_order_id.get(o.id, (None, None))[0],
+            real_status_reason=real_status_by_order_id.get(o.id, (None, None))[1],
         )
         for o in orders
     ]

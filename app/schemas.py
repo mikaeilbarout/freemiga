@@ -260,6 +260,13 @@ class OrderAdminOut(BaseModel):
     # Only set for provisioned orders — that's the only time a real Marzban
     # account (and thus a marzban-guard-tracked one) exists for this order.
     marzban_username: Optional[str] = None
+    # Live-checked, best-effort (see admin.py's _order_real_status) —
+    # None means "either everything's fine, or the check couldn't run".
+    # Order.status alone never reflects a plan running out of data, its
+    # expiry passing, or a restriction applied directly against Marzban
+    # or marzban-guard after provisioning.
+    real_status: Optional[str] = None
+    real_status_reason: Optional[str] = None
 
 
 class MarzbanGuardStatusOut(BaseModel):

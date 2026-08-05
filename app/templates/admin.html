@@ -441,14 +441,24 @@ function statusLabel(s) {
 }
 
 function orderRowHtml(o) {
+  // Order.status only ever tracks freemiga's own purchase lifecycle — it
+  // stays "provisioned" forever even after the plan runs out of data, its
+  // expiry date passes, or something disables the account directly in
+  // Marzban or marzban-guard after the fact. real_status (computed live
+  // server-side, see admin.py's _order_real_status) is what actually
+  // catches those cases and turns the badge red here.
+  const isRealDeactivated = o.status === 'provisioned' && o.real_status;
+  const badgeClass = isRealDeactivated ? 'badge-danger' : (o.status === 'provisioned' ? 'badge-success' : o.status === 'pending' ? 'badge-warning' : 'badge-danger');
+  const badgeLabel = isRealDeactivated ? 'Deactivated' : statusLabel(o.status);
   return `
     <div class="list-row">
       <div class="lr-main">
         <div class="lr-title">${escapeHtml(o.customer_username)} — ${escapeHtml(o.plan_name)}</div>
         <div class="lr-sub">$${o.amount_due} ${o.is_renewal ? '(renewal)' : '(new)'} · ${o.payment_method === 'card' ? 'Card (Stripe)' : o.payment_method === 'crypto' ? `Crypto (USDT-${o.crypto_network === 'polygon' ? 'Polygon' : 'TRC20'})` : 'Free'} · ${new Date(o.created_at).toLocaleString('en-US')}</div>
+        ${isRealDeactivated ? `<div class="row-meta" style="color:var(--danger); margin-top:4px">${escapeHtml(o.real_status_reason || o.real_status)}</div>` : ''}
       </div>
       <div class="lr-right">
-        <span class="badge ${o.status === 'provisioned' ? 'badge-success' : o.status === 'pending' ? 'badge-warning' : 'badge-danger'}">${statusLabel(o.status)}</span>
+        <span class="badge ${badgeClass}">${badgeLabel}</span>
         <div class="lr-actions">
           ${(o.status === 'pending' || o.status === 'failed') && o.payment_method === 'crypto'
             ? `<button class="btn btn-ghost btn-sm" onclick="confirmOrder('${o.id}')">Confirm manually</button>`
