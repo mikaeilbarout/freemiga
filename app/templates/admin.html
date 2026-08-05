@@ -83,9 +83,9 @@
     <div class="login-brand"><span class="brand-name" style="background:var(--gradient);-webkit-background-clip:text;background-clip:text;color:transparent">{{ site_name }}</span></div>
     <h2>Admin sign in</h2>
     <label for="adminUser">Username</label>
-    <input id="adminUser">
+    <input id="adminUser" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="username">
     <label for="adminPass">Password</label>
-    <input id="adminPass" type="password">
+    <input id="adminPass" type="password" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="current-password">
     <button class="btn btn-primary btn-block" onclick="adminLogin()">Log in</button>
     <div class="field-err" id="loginErr"></div>
   </div>
@@ -277,7 +277,11 @@ async function adminLogin() {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
-      username: document.getElementById('adminUser').value,
+      // .trim() only on username — a mobile keyboard's predictive text can
+      // tack on a trailing space that's invisible in the input box. Never
+      // trim the password: a space could legitimately be part of it, and
+      // silently altering it would be surprising.
+      username: document.getElementById('adminUser').value.trim(),
       password: document.getElementById('adminPass').value
     })
   });
