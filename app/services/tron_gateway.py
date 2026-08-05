@@ -62,6 +62,33 @@ def _headers() -> dict:
     return {"TRON-PRO-API-KEY": settings.TRONGRID_API_KEY} if settings.TRONGRID_API_KEY else {}
 
 
+def _find_matching_transfer(transfers: list[dict], expected_amount: float) -> dict:
+    """A transaction can contain more than one Transfer event on the USDT
+    contract (e.g. an exchange withdrawal or a smart-contract/batch-wallet
+    transaction) — the real payment to our wallet isn't always the first
+    one, so every candidate is checked instead of just transfers[0]. Raises
+    the most specific error code found across all candidates if none of
+    them actually pay us enough."""
+    best_code = "wrong_recipient"
+    for transfer in transfers:
+        result = transfer.get("result", {})
+        try:
+            recipient = _hex_to_base58(result["to"])
+            amount = int(result["value"]) / (10 ** USDT_DECIMALS)
+        except (KeyError, ValueError):
+            continue
+        if recipient != settings.TRON_USDT_WALLET_ADDRESS:
+            continue
+        if amount < expected_amount:
+            best_code = "amount_too_low"
+            continue
+        if transfer.get("_unconfirmed"):
+            best_code = "unconfirmed"
+            continue
+        return transfer
+    raise TronVerificationError(best_code)
+
+
 def verify_transaction(tx_hash: str, expected_amount: float) -> None:
     """Raises TronVerificationError on any failure. Returns None on success."""
     tx_hash = (tx_hash or "").strip().lower().removeprefix("0x")
@@ -86,21 +113,7 @@ def verify_transaction(tx_hash: str, expected_amount: float) -> None:
     if not transfers:
         raise TronVerificationError("not_found")
 
-    transfer = transfers[0]
-    if transfer.get("_unconfirmed"):
-        raise TronVerificationError("unconfirmed")
-
-    result = transfer.get("result", {})
-    try:
-        recipient = _hex_to_base58(result["to"])
-        amount = int(result["value"]) / (10 ** USDT_DECIMALS)
-    except (KeyError, ValueError):
-        raise TronVerificationError("not_found")
-
-    if recipient != settings.TRON_USDT_WALLET_ADDRESS:
-        raise TronVerificationError("wrong_recipient")
-    if amount < expected_amount:
-        raise TronVerificationError("amount_too_low")
+    _find_matching_transfer(transfers, expected_amount)
 
     with httpx.Client(timeout=15, headers=_headers()) as client:
         try:

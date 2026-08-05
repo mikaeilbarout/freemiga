@@ -40,6 +40,38 @@ def is_configured() -> bool:
     return bool(settings.POLYGON_USDT_WALLET_ADDRESS and settings.POLYGONSCAN_API_KEY)
 
 
+def _find_matching_log(logs: list[dict], usdt_contract: str, our_wallet: str, expected_amount: float) -> dict:
+    """A transaction can contain more than one Transfer event on the USDT
+    contract (e.g. an exchange withdrawal or a smart-contract/batch-wallet
+    transaction) — the real payment to our wallet isn't always the first
+    matching log, so every candidate is checked instead of just the first
+    one found. Raises the most specific error code found across all
+    candidates if none of them actually pay us enough."""
+    best_code = "not_found"
+    for log in logs:
+        if log.get("address", "").lower() != usdt_contract:
+            continue
+        topics = log.get("topics") or []
+        if not topics or topics[0].lower() != TRANSFER_EVENT_SIG or len(topics) < 3:
+            continue
+        if best_code == "not_found":
+            best_code = "wrong_recipient"
+        # topics[2] is the recipient, left-padded to 32 bytes — the address
+        # is the last 40 hex chars (20 bytes).
+        recipient = "0x" + topics[2][-40:]
+        if recipient.lower() != our_wallet:
+            continue
+        try:
+            amount = int(log["data"], 16) / (10 ** USDT_DECIMALS)
+        except (KeyError, ValueError, TypeError):
+            continue
+        if amount < expected_amount:
+            best_code = "amount_too_low"
+            continue
+        return log
+    raise PolygonVerificationError(best_code)
+
+
 def verify_transaction(tx_hash: str, expected_amount: float) -> None:
     """Raises PolygonVerificationError on any failure. Returns None on success."""
     tx_hash = (tx_hash or "").strip().lower()
@@ -79,29 +111,4 @@ def verify_transaction(tx_hash: str, expected_amount: float) -> None:
     usdt_contract = settings.USDT_POLYGON_CONTRACT_ADDRESS.lower()
     our_wallet = settings.POLYGON_USDT_WALLET_ADDRESS.lower()
 
-    transfer_log = None
-    for log in result.get("logs", []):
-        if log.get("address", "").lower() != usdt_contract:
-            continue
-        topics = log.get("topics") or []
-        if not topics or topics[0].lower() != TRANSFER_EVENT_SIG or len(topics) < 3:
-            continue
-        transfer_log = log
-        break
-
-    if not transfer_log:
-        raise PolygonVerificationError("not_found")
-
-    # topics[2] is the recipient, left-padded to 32 bytes — the address is
-    # the last 40 hex chars (20 bytes).
-    recipient = "0x" + transfer_log["topics"][2][-40:]
-    if recipient.lower() != our_wallet:
-        raise PolygonVerificationError("wrong_recipient")
-
-    try:
-        amount = int(transfer_log["data"], 16) / (10 ** USDT_DECIMALS)
-    except (KeyError, ValueError, TypeError):
-        raise PolygonVerificationError("not_found")
-
-    if amount < expected_amount:
-        raise PolygonVerificationError("amount_too_low")
+    _find_matching_log(result.get("logs", []), usdt_contract, our_wallet, expected_amount)

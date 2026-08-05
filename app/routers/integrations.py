@@ -10,6 +10,7 @@ Customer.is_banned flag (and the customer-facing dashboard/Telegram
 notice) in sync with a restriction that already happened, so a customer
 doesn't see "active" on the site while their VPN is actually blocked.
 """
+import asyncio
 import hmac
 import logging
 
@@ -19,9 +20,9 @@ from sqlalchemy.orm import Session
 from app import i18n
 from app.config import settings
 from app.database import get_db
-from app.models import AdminAuditLog, Customer, CustomerAlert
+from app.models import AdminAuditLog, Customer, CustomerAlert, Order, OrderStatus
 from app.schemas import MarzbanGuardDeviceLimitWarningIn, MarzbanGuardStatusIn
-from app.services import telegram
+from app.services import marzban_guard, telegram
 
 logger = logging.getLogger("integrations")
 
@@ -56,8 +57,48 @@ async def report_status(payload: MarzbanGuardStatusIn, db: Session = Depends(get
         return {"ok": True, "matched": False}
 
     was_banned = customer.is_banned
-    customer.is_banned = payload.banned
-    customer.ban_reason = payload.reason if payload.banned else None
+
+    if payload.banned:
+        # Restricting is always safe to apply immediately, regardless of
+        # what else is going on with this customer's other orders.
+        customer.is_banned = True
+        customer.ban_reason = payload.reason
+    else:
+        # This ONE order's Marzban account was cleared — but a customer can
+        # have several independent provisioned orders (see
+        # Order.marzban_username), each tracked separately by
+        # marzban-guard. Blindly clearing customer.is_banned here would
+        # wrongly reinstate a customer who still has a DIFFERENT order
+        # under active guard restriction, or override an admin-initiated
+        # ban (routers/admin.py) that only an admin should be able to
+        # lift. Only actually clear the flag if neither of those applies.
+        last_ban_action = (
+            db.query(AdminAuditLog)
+            .filter(
+                AdminAuditLog.target == customer.id,
+                AdminAuditLog.action.in_(["ban", "marzban_guard_ban"]),
+            )
+            .order_by(AdminAuditLog.created_at.desc())
+            .first()
+        )
+        admin_initiated = last_ban_action is not None and last_ban_action.action == "ban"
+
+        still_restricted = False
+        if not admin_initiated:
+            other_usernames = [
+                o.marzban_username for o in db.query(Order).filter(
+                    Order.customer_id == customer.id, Order.status == OrderStatus.provisioned
+                ).all()
+                if o.marzban_username != payload.username
+            ]
+            if other_usernames:
+                statuses = await asyncio.gather(*(marzban_guard.get_status(u) for u in other_usernames))
+                still_restricted = any(s and s.get("status") not in (None, "active") for s in statuses)
+
+        if not admin_initiated and not still_restricted:
+            customer.is_banned = False
+            customer.ban_reason = None
+
     db.add(AdminAuditLog(
         action="marzban_guard_ban" if payload.banned else "marzban_guard_unban",
         target=customer.id,
@@ -65,8 +106,8 @@ async def report_status(payload: MarzbanGuardStatusIn, db: Session = Depends(get
     ))
     db.commit()
 
-    if customer.telegram_chat_id and was_banned != payload.banned:
-        if payload.banned:
+    if customer.telegram_chat_id and was_banned != customer.is_banned:
+        if customer.is_banned:
             text = (
                 f"⚠️ Your account has been suspended.\nReason: {payload.reason}\n"
                 "Contact support from the site to follow up."

@@ -17,6 +17,8 @@ import re
 import secrets
 from datetime import datetime, timedelta
 
+from sqlalchemy.exc import IntegrityError
+
 from app.auth import hash_password
 from app.config import settings
 from app.models import Customer, Order, OrderStatus, PaymentMethod, Plan, SupportTicket, TicketMessage
@@ -95,6 +97,8 @@ TEXT = {
         "back": "← Back",
         "invalid_link": "That connection link appears to be invalid or expired. Please use the menu below instead:",
         "linked": "✅ Your Telegram account has been linked to your site account.",
+        "relink_notice": "⚠️ Your account's Telegram connection was just moved to a different chat. "
+        "If this wasn't you, please contact support and consider changing your password right away.",
     },
     "fa": {
         "choose_language": "لطفاً زبان مورد نظرتون رو انتخاب کنید:",
@@ -156,6 +160,8 @@ TEXT = {
         "back": "← بازگشت",
         "invalid_link": "این لینک اتصال نامعتبر یا منقضی شده است. لطفاً از منوی زیر استفاده کنید:",
         "linked": "✅ حساب تلگرام شما به حساب سایت‌تون متصل شد.",
+        "relink_notice": "⚠️ اتصال تلگرام حساب شما همین الان به یک چت دیگه منتقل شد. "
+        "اگه این کار شما نبوده، لطفاً با پشتیبانی تماس بگیرید و رمز عبورتون رو هم عوض کنید.",
     },
 }
 
@@ -483,8 +489,24 @@ async def _handle_start(db, chat_id: str, text: str, customer: Customer | None) 
         target_id = parts[1].strip()
         target = db.query(Customer).filter(Customer.id == target_id).first()
         if target:
+            previous_chat_id = target.telegram_chat_id
             target.telegram_chat_id = chat_id
-            db.commit()
+            try:
+                db.commit()
+            except IntegrityError:
+                # chat_id is already linked to a DIFFERENT customer account
+                # (telegram_chat_id is unique) — treat like an invalid link
+                # rather than letting the exception bubble up silently.
+                db.rollback()
+                await telegram.send_message(chat_id, _t(lang, "invalid_link"))
+                return
+            if previous_chat_id and previous_chat_id != chat_id:
+                # Tripwire: if this account's Telegram link is ever moved by
+                # someone other than its owner (e.g. a leaked/guessed deep
+                # link — see telegram.deep_link), the real owner still
+                # holding the OLD chat finds out immediately, since that
+                # chat is also where password-reset codes get sent.
+                await telegram.send_message(previous_chat_id, _t(target.language or "en", "relink_notice"))
             await telegram.send_message(chat_id, _t(target.language or "en", "linked"))
             await _show_main_menu(chat_id, target.language or "en", "welcome_back")
             return
@@ -543,7 +565,16 @@ async def _handle_email_reply(db, chat_id: str, lang: str, email: str) -> None:
         language=lang,
     )
     db.add(customer)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Concurrent signup grabbed the same username/email/chat link a
+        # moment ago (e.g. a double-tap) — restart from the username step
+        # rather than leaving this chat stuck with no response.
+        db.rollback()
+        session["state"] = "awaiting_username"
+        await telegram.send_message(chat_id, _t(lang, "username_taken"))
+        return
     db.refresh(customer)
 
     await telegram.send_message(chat_id, _t(lang, "account_created", username=username))
