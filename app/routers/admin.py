@@ -88,6 +88,9 @@ def admin_list_plans(db: Session = Depends(get_db), page: int = 1, page_size: in
 @router.post("/plans", response_model=PlanOut, dependencies=[Depends(require_admin)])
 def create_plan(payload: PlanCreate, db: Session = Depends(get_db)):
     plan = Plan(**payload.model_dump())
+    if plan.is_featured:
+        # At most one "Best value" plan at a time — see Plan.is_featured.
+        db.query(Plan).update({Plan.is_featured: False})
     db.add(plan)
     db.commit()
     db.refresh(plan)
@@ -100,7 +103,10 @@ def update_plan(plan_id: str, payload: PlanUpdate, db: Session = Depends(get_db)
     plan = db.query(Plan).filter(Plan.id == plan_id).first()
     if not plan:
         raise HTTPException(404, "Plan not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(exclude_unset=True)
+    if updates.get("is_featured") is True:
+        db.query(Plan).filter(Plan.id != plan_id).update({Plan.is_featured: False})
+    for field, value in updates.items():
         setattr(plan, field, value)
     db.commit()
     db.refresh(plan)

@@ -24,7 +24,11 @@
 
 {% set check_svg %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>{% endset %}
 {% set paid_plans = plans | selectattr('price_usdt', 'gt', 0) | list %}
-{% set featured = (paid_plans | sort(attribute='price_usdt', reverse=True) | first) if paid_plans else none %}
+{# An admin-picked plan (Plan.is_featured, set in the admin panel) always
+   wins; only auto-picks the priciest paid plan when none is explicitly
+   marked, same as this page's original behavior. #}
+{% set manually_featured = plans | selectattr('is_featured', 'equalto', true) | first %}
+{% set featured = manually_featured if manually_featured else ((paid_plans | sort(attribute='price_usdt', reverse=True) | first) if paid_plans else none) %}
 {% set featured_id = featured.id if featured else none %}
 {% set plans_page_size = 6 %}
 
@@ -150,10 +154,14 @@ function updatePaginationControls() {
 // so the plan listing itself is never blocked on this running at all.
 function renderPlansPage() {
   const grid = document.getElementById('plansGrid');
+  // An admin-picked plan (is_featured) always wins; only auto-pick the
+  // priciest paid plan when none is explicitly marked — mirrors the Jinja
+  // logic used for the server-rendered first page above.
   const paidPlans = allPlans.filter(p => p.price_usdt > 0);
-  const featuredId = paidPlans.length
-    ? paidPlans.reduce((a, b) => (b.price_usdt > a.price_usdt ? b : a), paidPlans[0]).id
-    : null;
+  const manuallyFeatured = allPlans.find(p => p.is_featured);
+  const featuredId = manuallyFeatured
+    ? manuallyFeatured.id
+    : (paidPlans.length ? paidPlans.reduce((a, b) => (b.price_usdt > a.price_usdt ? b : a), paidPlans[0]).id : null);
 
   currentPlansPage = Math.min(currentPlansPage, totalPlansPages() - 1);
   const start = currentPlansPage * PLANS_PAGE_SIZE;

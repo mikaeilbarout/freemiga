@@ -88,6 +88,12 @@ class Plan(Base):
     # separate marzban-guard abuse-detection system, not by this app.
     # NULL means "use marzban-guard's own global default", not "unlimited".
     max_devices = Column(Integer, nullable=True)
+    # Manually picks which plan shows the "Best value" tag on /plans — see
+    # plans_page.html. At most one plan should have this set at a time (the
+    # admin UI enforces that by clearing it on every other plan when one is
+    # checked); if none is set, the page falls back to auto-picking the
+    # highest-priced paid plan, same as before this field existed.
+    is_featured = Column(Boolean, default=False, nullable=False)
 
     orders = relationship("Order", back_populates="plan")
 

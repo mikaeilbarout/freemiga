@@ -732,10 +732,10 @@ async function loadPlans(reset = true) {
   ` + (data.items.map(p => `
     <div class="card row-card">
       <div class="row-top">
-        <div class="name">${escapeHtml(p.name)} ${!p.is_active ? '(inactive)' : ''}</div>
+        <div class="name">${escapeHtml(p.name)} ${!p.is_active ? '(inactive)' : ''} ${p.is_featured ? '⭐' : ''}</div>
         <span class="badge ${p.is_active ? 'badge-success' : 'badge-danger'}">$${p.price_usdt}</span>
       </div>
-      <div class="row-meta">${p.data_limit_gb} GB · ${p.duration_days} days · ${p.max_devices ? p.max_devices + ' devices' : 'default device limit'}</div>
+      <div class="row-meta">${p.data_limit_gb} GB · ${p.duration_days} days · ${p.max_devices ? p.max_devices + ' devices' : 'default device limit'}${p.is_featured ? ' · Best value on /plans' : ''}</div>
       <div class="actions">
         <button class="btn btn-ghost btn-sm" onclick="toggleEditPlan('${p.id}')">Edit</button>
         <button class="btn btn-ghost btn-sm" onclick="togglePlanActive('${p.id}', ${p.is_active})">${p.is_active ? 'Deactivate' : 'Reactivate'}</button>
@@ -749,6 +749,9 @@ async function loadPlans(reset = true) {
         <input id="editDevices-${p.id}" value="${p.max_devices ?? ''}" placeholder="Max devices (blank uses marzban-guard's default)" type="number">
         <div style="margin:6px 0 10px">
           <label><input type="checkbox" id="editActive-${p.id}" ${p.is_active ? 'checked' : ''}> Active (shown to customers)</label>
+        </div>
+        <div style="margin:6px 0 10px">
+          <label><input type="checkbox" id="editFeatured-${p.id}" ${p.is_featured ? 'checked' : ''}> ⭐ Best value (shows the highlighted tag on /plans — checking this unchecks it on every other plan)</label>
         </div>
         <button class="btn btn-primary btn-sm" onclick="savePlan('${p.id}')">Save changes</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleEditPlan('${p.id}')">Cancel</button>
@@ -1160,6 +1163,7 @@ async function savePlan(id) {
     duration_days: parseInt(document.getElementById(`editDays-${id}`).value),
     max_devices: devicesRaw ? parseInt(devicesRaw) : null,
     is_active: document.getElementById(`editActive-${id}`).checked,
+    is_featured: document.getElementById(`editFeatured-${id}`).checked,
   };
   if (!payload.name || isNaN(payload.price_usdt) || !payload.data_limit_gb || !payload.duration_days) {
     showToast('Please fill in every field (price can be 0 for a free plan).', 'error');

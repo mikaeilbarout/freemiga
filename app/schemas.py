@@ -119,6 +119,7 @@ class PlanOut(BaseModel):
     duration_days: int
     is_active: bool = True
     max_devices: Optional[int] = None
+    is_featured: bool = False
 
     class Config:
         from_attributes = True
@@ -130,6 +131,7 @@ class PlanCreate(BaseModel):
     data_limit_gb: int
     duration_days: int
     max_devices: Optional[int] = None
+    is_featured: bool = False
 
 
 class PlanUpdate(BaseModel):
@@ -139,6 +141,7 @@ class PlanUpdate(BaseModel):
     duration_days: Optional[int] = None
     is_active: Optional[bool] = None
     max_devices: Optional[int] = None
+    is_featured: Optional[bool] = None
 
 
 class OrderCreate(BaseModel):
