@@ -326,10 +326,24 @@ async def _live_status_for_order(order: Order) -> dict:
 
     sub_path = data.get("subscription_url") or ""
     expire_ts = data.get("expire")
+    # Prefer the raw per-inbound config links (e.g. vless://...) over the
+    # subscription URL: this Marzban instance is on an old, long-stale
+    # image (gozargah/marzban:latest last pulled 2025-01-09) whose client
+    # detection doesn't recognize current v2rayNG's User-Agent, so it
+    # serves the browser-facing HTML info page to the app instead of a
+    # parseable subscription body — v2rayNG's "Import from URL" then
+    # silently does nothing, while pasting an individual config link
+    # works fine. Once Marzban is updated this distinction may no longer
+    # matter, but raw links work everywhere either way, just without a
+    # subscription's auto-refresh-on-renewal convenience.
+    links = data.get("links") or []
+    config_links = "\n".join(links) if links else None
     return {
         **base,
         "has_account": True,
-        "subscription_url": f"{settings.MARZBAN_BASE_URL}{sub_path}" if sub_path else order.subscription_url,
+        "subscription_url": config_links or (
+            f"{settings.MARZBAN_BASE_URL}{sub_path}" if sub_path else order.subscription_url
+        ),
         "marzban_status": data.get("status"),  # "active" | "expired" | "limited" | "disabled"
         "expire_at": datetime.utcfromtimestamp(expire_ts).isoformat() + "Z" if expire_ts else None,
         "unreachable": False,
