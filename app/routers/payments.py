@@ -49,6 +49,12 @@ async def _mark_paid_and_provision(order_id: str) -> None:
 
 @router.post("/stripe/webhook")
 async def stripe_webhook(request: Request, stripe_signature: str = Header(None, alias="Stripe-Signature")):
+    if not stripe_gateway.is_configured():
+        # Without this, an unset STRIPE_WEBHOOK_SECRET means
+        # construct_webhook_event verifies against an empty-string key —
+        # trivially forgeable by anyone, since HMAC with a known (empty)
+        # key is no security at all. Reject outright instead.
+        raise HTTPException(503, "Stripe integration not configured")
     payload = await request.body()
     try:
         event = stripe_gateway.construct_webhook_event(payload, stripe_signature)
@@ -69,6 +75,17 @@ async def nowpayments_webhook(
     request: Request,
     x_nowpayments_sig: str = Header(None, alias="x-nowpayments-sig"),
 ):
+    if not nowpayments_gateway.is_configured():
+        # Critical: without this, an unset NOWPAYMENTS_IPN_SECRET (the
+        # current state — see config.py, this gateway is legacy and no
+        # invoice is ever created through it anymore) means
+        # verify_ipn_signature checks a submitted signature against an
+        # HMAC computed with an empty-string key. Anyone can compute that
+        # exact same HMAC themselves with no secret knowledge at all, so
+        # this endpoint would accept a forged "payment_status": "finished"
+        # for ANY pending order_id — a complete, unauthenticated payment
+        # bypass. Reject outright unless a real IPN secret is configured.
+        raise HTTPException(503, "NowPayments integration not configured")
     payload = await request.json()
     if not nowpayments_gateway.verify_ipn_signature(payload, x_nowpayments_sig):
         raise HTTPException(400, "Invalid IPN signature")
