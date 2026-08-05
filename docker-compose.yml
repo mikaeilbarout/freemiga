@@ -26,6 +26,16 @@ services:
         condition: service_healthy
     volumes:
       - banner_uploads:/app/app/static/uploads/banners
+      # blog and tickets were missing their own volumes — uploads.py
+      # writes them to the container's own filesystem, which is thrown
+      # away on every `--force-recreate` (every deploy.sh run). Without
+      # a persistent volume here, blog post images and support-ticket
+      # attachments silently vanished (their DB rows/paths survived in
+      # Postgres, but the actual files didn't) the next time the app
+      # container got rebuilt — exactly what banner_uploads already
+      # existed to prevent for banners specifically.
+      - blog_uploads:/app/app/static/uploads/blog
+      - ticket_uploads:/app/app/static/uploads/tickets
     expose:
       - "8001"
 
@@ -53,5 +63,7 @@ services:
 volumes:
   postgres_data:
   banner_uploads:
+  blog_uploads:
+  ticket_uploads:
   certbot_www:
   certbot_certs:
