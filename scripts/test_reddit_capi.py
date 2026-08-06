@@ -1,7 +1,7 @@
 """
 One-off — sends a single real Conversions API event carrying Reddit's
 "Test Events" test_id, so you can confirm in Reddit Ads Manager's own
-test panel that REDDIT_CAPI_ACCOUNT_ID / REDDIT_CAPI_ACCESS_TOKEN and the
+test panel that REDDIT_PIXEL_ID / REDDIT_CAPI_ACCESS_TOKEN and the
 endpoint in services/reddit_capi.py are actually correct — before any
 real customer traffic goes through them.
 
@@ -26,7 +26,7 @@ from app.services import reddit_capi
 
 async def main() -> None:
     if not reddit_capi.is_configured():
-        print("REDDIT_CAPI_ACCOUNT_ID / REDDIT_CAPI_ACCESS_TOKEN aren't set — nothing to test.")
+        print("REDDIT_PIXEL_ID / REDDIT_CAPI_ACCESS_TOKEN aren't set — nothing to test.")
         return
 
     test_id = sys.argv[1] if len(sys.argv) > 1 else None

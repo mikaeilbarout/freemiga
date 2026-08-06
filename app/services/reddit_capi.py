@@ -11,17 +11,16 @@ Best-effort only, same convention as marzban_guard.py: a failure here
 must never affect signup/checkout, since by the time this runs the real
 side effect (account created, order provisioned) has already happened.
 
-NOTE: Reddit's own docs (business.reddithelp.com/.../Conversions-API)
-weren't fetchable while writing this (blocked automated requests), and
-third-party integration docs disagree slightly on the exact API version
-segment in the endpoint path. Before relying on this in production, open
-the Conversions API setup page in Reddit Ads Manager itself — it shows
-your account's exact endpoint/curl example — and update REDDIT_CAPI_BASE
-below if it differs from what's here.
+Endpoint/body shape below is taken directly from the curl example on
+this account's own Conversions API setup page in Reddit Ads Manager
+(Events Manager -> pixel -> Conversions API -> Set up events) — not
+third-party docs, which disagreed with each other and with this on
+several fields (endpoint path, body wrapper, event_at format, field
+names) when this was first written from those instead.
 """
 import hashlib
 import logging
-from datetime import datetime, timezone
+import time
 
 import httpx
 
@@ -29,11 +28,11 @@ from app.config import settings
 
 logger = logging.getLogger("reddit_capi")
 
-REDDIT_CAPI_BASE = "https://ads-api.reddit.com/api/v2.3/conversions/events"
+REDDIT_CAPI_URL_TEMPLATE = "https://ads-api.reddit.com/api/v3/pixels/{pixel_id}/conversion_events"
 
 
 def is_configured() -> bool:
-    return bool(settings.REDDIT_CAPI_ACCOUNT_ID and settings.REDDIT_CAPI_ACCESS_TOKEN)
+    return bool(settings.REDDIT_PIXEL_ID and settings.REDDIT_CAPI_ACCESS_TOKEN)
 
 
 def _hash_email(email: str) -> str:
@@ -70,35 +69,37 @@ async def send_event(
     user: dict = {}
     if email:
         user["email"] = _hash_email(email)
-    if click_id:
-        user["click_id"] = click_id
     if ip_address:
         user["ip_address"] = ip_address
     if user_agent:
         user["user_agent"] = user_agent
 
     event: dict = {
-        "event_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "event_type": {"tracking_type": tracking_type},
+        "event_at": int(time.time() * 1000),  # Unix epoch milliseconds, per Reddit's own example
+        "action_source": "WEBSITE",
+        "type": {"tracking_type": tracking_type},
         "user": user,
     }
+    if click_id:
+        event["click_id"] = click_id  # sibling of "user", not nested inside it
     if test_id:
         event["test_id"] = test_id
     metadata: dict = {}
     if value is not None:
         metadata["currency"] = currency
-        metadata["value_decimal"] = value
+        metadata["value"] = value
         metadata["item_count"] = 1
     if conversion_id:
         metadata["conversion_id"] = conversion_id
     if metadata:
-        event["event_metadata"] = metadata
+        event["metadata"] = metadata
 
+    url = REDDIT_CAPI_URL_TEMPLATE.format(pixel_id=settings.REDDIT_PIXEL_ID)
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
-                f"{REDDIT_CAPI_BASE}/{settings.REDDIT_CAPI_ACCOUNT_ID}",
-                json={"test_mode": False, "events": [event]},
+                url,
+                json={"data": {"events": [event]}},
                 headers={"Authorization": f"Bearer {settings.REDDIT_CAPI_ACCESS_TOKEN}"},
             )
             if resp.status_code >= 300:
