@@ -215,6 +215,20 @@ async function fetchCheckoutUrl() {
   }
 }
 
+let customerEmail = null;
+async function loadCustomerEmail() {
+  // Best-effort, for Enhanced Conversions below — if this fails (or
+  // hasn't resolved yet by the time the order is provisioned) the base
+  // conversion still fires, just without the extra match signal.
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      const data = await res.json();
+      customerEmail = data.email || null;
+    }
+  } catch (e) {}
+}
+
 function reportPurchaseConversion(order) {
   // Fired the moment an order actually finishes provisioning — the only
   // point in the flow that's unique to a completed, paid purchase (unlike
@@ -223,6 +237,16 @@ function reportPurchaseConversion(order) {
   if (!order.amount_due) return; // free plan — not a paid "Purchase" conversion
   const key = 'ads_conv_reported_' + orderId;
   if (localStorage.getItem(key)) return; // already reported (e.g. page revisited/refreshed)
+  if (customerEmail) {
+    // Enhanced conversions — lets Google Ads match this conversion back
+    // to the ad click even when browser-side signals (cookies, click ID)
+    // are lost, e.g. Safari ITP or a different device between click and
+    // purchase. gtag.js hashes this client-side before it leaves the
+    // browser. Requires "Turn on enhanced conversions" to be enabled in
+    // Google Ads account settings (Goals > Conversions) — this call is a
+    // no-op there until that's on.
+    gtag('set', 'user_data', {email: customerEmail});
+  }
   gtag('event', 'conversion', {
     send_to: GOOGLE_ADS_CONVERSION_SEND_TO,
     value: order.amount_due,
@@ -310,6 +334,7 @@ async function cancelThisOrder() {
 }
 
 loadWalletAddress().then(poll);
+if (GOOGLE_ADS_CONVERSION_SEND_TO) loadCustomerEmail();
 fetchCheckoutUrl();
 </script>
 </body>
