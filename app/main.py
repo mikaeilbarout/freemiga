@@ -337,6 +337,42 @@ def robots_txt():
     return "\n".join(lines)
 
 
+# llms.txt (https://llmstxt.org) — a curated, plain-language summary of the
+# site for AI assistants/crawlers, distinct from robots.txt/sitemap.xml
+# which are about crawl permissions and page discovery, not content. Kept
+# static (like the SEO meta descriptions elsewhere) rather than pulled from
+# the DB — this is a stable "what is this site" summary, not live pricing.
+@app.get("/llms.txt", response_class=PlainTextResponse)
+def llms_txt():
+    site = settings.SITE_BASE_URL.rstrip("/")
+    name = settings.SITE_NAME
+    lines = [
+        f"# {name}",
+        "",
+        f"> {name} is a fast, no-log VPN service (V2Ray/VLESS/Xray-based) for bypassing "
+        "internet censorship, protecting online privacy, and streaming without restrictions. "
+        "Plans start at $2.99/month, payable by card or crypto (USDT on Tron/Polygon). "
+        "Available in English and Persian, with support for iOS, Android, Windows, and macOS.",
+        "",
+        "## Key pages",
+        f"- [Plans & pricing]({site}/en/plans): compare solo, family, and team VPN plans.",
+        f"- [How it works]({site}/en/how-it-works): sign up, choose a plan, connect in minutes.",
+        f"- [Setup guides]({site}/en/guide): step-by-step connection guides per device (iOS, Android, Windows, macOS).",
+        f"- [Features]({site}/en/features): no-log policy, server speed, 24/7 support.",
+        f"- [FAQ]({site}/en/faq): pricing, payment methods, refunds, device limits, logging policy.",
+        f"- [Blog]({site}/en/blog): guides on VPN protocols, encryption, and online privacy.",
+        f"- [About]({site}/en/about): why {name} was built and how it stays no-log.",
+        f"- [Contact]({site}/en/contact): support contact information.",
+        "",
+        "## Optional",
+        f"- [Terms of service]({site}/en/terms)",
+        f"- [Privacy policy]({site}/en/privacy)",
+        f"- [Refund policy]({site}/en/refund-policy)",
+        f"- [Cookie policy]({site}/en/cookies)",
+    ]
+    return "\n".join(lines)
+
+
 # Required by the IndexNow protocol so a search engine can confirm this
 # site actually controls the key it's pinging with — only registered at
 # all once an operator sets INDEXNOW_KEY, same "empty means not set up
