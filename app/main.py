@@ -222,6 +222,8 @@ def render(request: Request, template_name: str, *, force_lang: str = None, stat
         "ga_measurement_id": settings.GA_MEASUREMENT_ID,
         "gsc_verification": settings.GSC_VERIFICATION,
         "bing_verification": settings.BING_VERIFICATION,
+        "google_ads_conversion_id": settings.GOOGLE_ADS_CONVERSION_ID,
+        "google_ads_conversion_label": settings.GOOGLE_ADS_CONVERSION_LABEL,
         **extra_context,
     }
     response = templates.TemplateResponse(template_name, context, status_code=status_code)

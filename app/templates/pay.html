@@ -100,6 +100,11 @@
 {% include "_footer.html" %}
 
 <script>
+// Empty string when the conversion action isn't configured yet (see
+// GOOGLE_ADS_CONVERSION_ID/LABEL in .env.example) — reportPurchaseConversion()
+// below is then a no-op.
+const GOOGLE_ADS_CONVERSION_SEND_TO = {{ (google_ads_conversion_id ~ '/' ~ google_ads_conversion_label if (google_ads_conversion_id and google_ads_conversion_label) else '')|tojson }};
+
 const PAY_I18N = {
   methodCard: {{ t('pay_method_card')|tojson }},
   methodCrypto: {{ t('pay_method_crypto')|tojson }},
@@ -204,6 +209,23 @@ async function fetchCheckoutUrl() {
   }
 }
 
+function reportPurchaseConversion(order) {
+  // Fired the moment an order actually finishes provisioning — the only
+  // point in the flow that's unique to a completed, paid purchase (unlike
+  // / or /dashboard, which anyone can reach without buying anything).
+  if (!GOOGLE_ADS_CONVERSION_SEND_TO || typeof gtag !== 'function') return;
+  if (!order.amount_due) return; // free plan — not a paid "Purchase" conversion
+  const key = 'ads_conv_reported_' + orderId;
+  if (localStorage.getItem(key)) return; // already reported (e.g. page revisited/refreshed)
+  gtag('event', 'conversion', {
+    send_to: GOOGLE_ADS_CONVERSION_SEND_TO,
+    value: order.amount_due,
+    currency: 'USD',
+    transaction_id: orderId,
+  });
+  localStorage.setItem(key, '1');
+}
+
 function badge(status) {
   const map = {
     pending: 'badge-warning badge-pulse',
@@ -237,6 +259,7 @@ async function poll() {
   }
 
   if (order.status === 'provisioned' && order.subscription_url) {
+    reportPurchaseConversion(order);
     document.getElementById('resultBox').innerHTML = `
       <div class="row-block">
         <div class="row-label">${PAY_I18N.vpnLinkLabel}</div>

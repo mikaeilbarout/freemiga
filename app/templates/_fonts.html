@@ -7,12 +7,17 @@
 {#- no_ga (set by admin.html's render() call) keeps staff logins/actions in
    the admin panel out of the public GA property — otherwise every visit
    here would count as site traffic and skew real visitor analytics. #}
-{%- if ga_measurement_id and not no_ga %}
+{%- if (ga_measurement_id or google_ads_conversion_id) and not no_ga %}
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
+  {%- if ga_measurement_id %}
   gtag('config', {{ ga_measurement_id|tojson }});
+  {%- endif %}
+  {%- if google_ads_conversion_id %}
+  gtag('config', {{ google_ads_conversion_id|tojson }});
+  {%- endif %}
   // gtag.js itself is ~160KB — fetching/parsing/executing it during the
   // page's first paint competed with actually-critical resources (fonts,
   // CSS) for bandwidth and main-thread time, for nothing visible in
@@ -25,7 +30,7 @@
   function _loadGtagScript() {
     const s = document.createElement('script');
     s.async = true;
-    s.src = "https://www.googletagmanager.com/gtag/js?id={{ ga_measurement_id }}";
+    s.src = "https://www.googletagmanager.com/gtag/js?id={{ google_ads_conversion_id or ga_measurement_id }}";
     document.head.appendChild(s);
   }
   if (document.readyState === 'complete') {

@@ -106,6 +106,12 @@ class Settings:
     GA_MEASUREMENT_ID: str = os.getenv("GA_MEASUREMENT_ID", "")  # e.g. "G-XXXXXXXXXX"
     GSC_VERIFICATION: str = os.getenv("GSC_VERIFICATION", "")  # Search Console HTML tag content=""
     BING_VERIFICATION: str = os.getenv("BING_VERIFICATION", "")  # Bing Webmaster Tools meta content
+    # Google Ads "Purchase" conversion action, fired from pay.html the
+    # moment an order actually finishes provisioning — not tied to any
+    # URL, since neither / nor /dashboard is unique to a completed
+    # purchase. Both empty means the conversion tag is simply omitted.
+    GOOGLE_ADS_CONVERSION_ID: str = os.getenv("GOOGLE_ADS_CONVERSION_ID", "")  # e.g. "AW-123456789"
+    GOOGLE_ADS_CONVERSION_LABEL: str = os.getenv("GOOGLE_ADS_CONVERSION_LABEL", "")
     # IndexNow key — any string you choose. Once set, the site serves
     # GET /{key}.txt (required by the protocol so search engines can
     # confirm you control the domain) and pings IndexNow after each blog
