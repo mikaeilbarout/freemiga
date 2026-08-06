@@ -57,6 +57,10 @@ async def send_event(
     call site (tracking.py) ever passes it. Returns the HTTP response so
     that one-off script can show the caller what actually happened;
     regular callers ignore the return value, same as before.
+
+    Reddit's UI says to add test_id "to the event", but the real API
+    rejects it there ("unknown field") — confirmed live, it actually
+    belongs inside "data", as a sibling of "events".
     """
     if not is_configured():
         return None
@@ -82,8 +86,6 @@ async def send_event(
     }
     if click_id:
         event["click_id"] = click_id  # sibling of "user", not nested inside it
-    if test_id:
-        event["test_id"] = test_id
     metadata: dict = {}
     if value is not None:
         metadata["currency"] = currency
@@ -94,12 +96,16 @@ async def send_event(
     if metadata:
         event["metadata"] = metadata
 
+    data: dict = {"events": [event]}
+    if test_id:
+        data["test_id"] = test_id  # sibling of "events" inside "data" — confirmed against the live API
+
     url = REDDIT_CAPI_URL_TEMPLATE.format(pixel_id=settings.REDDIT_PIXEL_ID)
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
                 url,
-                json={"data": {"events": [event]}},
+                json={"data": data},
                 headers={"Authorization": f"Bearer {settings.REDDIT_CAPI_ACCESS_TOKEN}"},
             )
             if resp.status_code >= 300:
