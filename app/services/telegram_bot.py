@@ -68,6 +68,11 @@ TEXT = {
         "choose_payment": "How would you like to pay for {plan_name} (${price})?",
         "pay_card": "💳 Pay with card",
         "pay_crypto": "🪙 Pay with crypto",
+        "pay_card_to_card": "🏦 Card-to-card transfer",
+        "card_to_card_instructions": "For a card-to-card transfer, please message our support with the plan you want "
+        "({plan_name} — ${price}). They'll send you the account details and confirm your order once the transfer "
+        "is received.\n\nSupport: @{support_username}",
+        "card_to_card_no_support": "Card-to-card transfer isn't available right now — please contact support from the site instead.",
         "no_payment_methods": "No payment method is available on this deployment yet — please contact support.",
         "checkout_ready": "Please tap below to complete your ${price} payment for {plan_name}. "
         "This page updates automatically, and we'll let you know here as soon as it's confirmed.",
@@ -131,6 +136,11 @@ TEXT = {
         "choose_payment": "پلن {plan_name} (${price}) رو چطور مایلید پرداخت کنید؟",
         "pay_card": "💳 پرداخت با کارت",
         "pay_crypto": "🪙 پرداخت با کریپتو",
+        "pay_card_to_card": "🏦 کارت به کارت",
+        "card_to_card_instructions": "برای پرداخت کارت به کارت، لطفاً به پشتیبانی ما پیام بدید و پلن مورد نظرتون رو "
+        "بگید ({plan_name} — ${price}). شماره کارت رو براتون می‌فرستن و بعد از واریز، سفارشتون رو تأیید می‌کنن.\n\n"
+        "پشتیبانی: @{support_username}",
+        "card_to_card_no_support": "پرداخت کارت به کارت الان در دسترس نیست — لطفاً از طریق سایت با پشتیبانی تماس بگیرید.",
         "no_payment_methods": "با عرض پوزش، در حال حاضر روش پرداختی روی این سرویس فعال نشده — لطفاً با پشتیبانی تماس بگیرید.",
         "checkout_ready": "برای تکمیل پرداخت ${price} پلن {plan_name}، لطفاً روی دکمه‌ی زیر بزنید. "
         "این صفحه به‌صورت خودکار به‌روزرسانی میشه و به‌محض تأیید پرداخت، همینجا بهتون اطلاع می‌دیم.",
@@ -222,6 +232,10 @@ def _payment_kb(lang: str, plan_id: str) -> dict:
         rows.append([{"text": _t(lang, "pay_card"), "callback_data": f"pay:card:{plan_id}"}])
     if _crypto_configured():
         rows.append([{"text": _t(lang, "pay_crypto"), "callback_data": f"pay:crypto:{plan_id}"}])
+    # Card-to-card has no automated verification — it only makes sense to
+    # offer if there's a support contact to actually message about it.
+    if settings.TELEGRAM_SUPPORT_USERNAME:
+        rows.append([{"text": _t(lang, "pay_card_to_card"), "callback_data": f"cardtocard:{plan_id}"}])
     rows.append([{"text": _t(lang, "back"), "callback_data": "menu:plans"}])
     return _kb(rows)
 
@@ -701,6 +715,27 @@ async def _handle_callback(db, callback_query: dict) -> None:
             plan = db.query(Plan).filter(Plan.id == plan_id).first()
             if plan:
                 await _show_payment_choice(db, chat_id, lang, plan, customer)
+        return
+
+    if data.startswith("cardtocard:"):
+        plan_id = data.split(":", 1)[1]
+        if not settings.TELEGRAM_SUPPORT_USERNAME:
+            await telegram.send_message(chat_id, _t(lang, "card_to_card_no_support"))
+            return
+        plan = db.query(Plan).filter(Plan.id == plan_id).first()
+        if plan:
+            await telegram.send_message(
+                chat_id,
+                _t(
+                    lang, "card_to_card_instructions",
+                    plan_name=plan.name, price=plan.price_usdt,
+                    support_username=settings.TELEGRAM_SUPPORT_USERNAME,
+                ),
+                reply_markup=_kb([[{
+                    "text": _t(lang, "chat_telegram"),
+                    "url": f"https://t.me/{settings.TELEGRAM_SUPPORT_USERNAME}",
+                }]]),
+            )
         return
 
     if data.startswith("pay:"):
