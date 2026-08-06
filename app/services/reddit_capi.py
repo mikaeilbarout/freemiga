@@ -50,14 +50,22 @@ async def send_event(
     conversion_id: str | None = None,
     value: float | None = None,
     currency: str = "USD",
-) -> None:
+    test_id: str | None = None,
+) -> httpx.Response | None:
+    """test_id is ONLY for one-off verification via Reddit Ads Manager's
+    "Test Events" panel (see scripts/test_reddit_capi.py) — Reddit's own
+    instructions there say to remove it before production, so no real
+    call site (tracking.py) ever passes it. Returns the HTTP response so
+    that one-off script can show the caller what actually happened;
+    regular callers ignore the return value, same as before.
+    """
     if not is_configured():
-        return
+        return None
     # Reddit requires at least one attribution signal per event — with
     # neither of these there's nothing to match the event to, so the call
     # would just be rejected.
     if not click_id and not email:
-        return
+        return None
 
     user: dict = {}
     if email:
@@ -74,6 +82,8 @@ async def send_event(
         "event_type": {"tracking_type": tracking_type},
         "user": user,
     }
+    if test_id:
+        event["test_id"] = test_id
     metadata: dict = {}
     if value is not None:
         metadata["currency"] = currency
@@ -95,5 +105,7 @@ async def send_event(
                 logger.warning(
                     "Reddit CAPI %s event rejected: %s %s", tracking_type, resp.status_code, resp.text,
                 )
+            return resp
     except Exception:
         logger.exception("Error sending Reddit CAPI %s event", tracking_type)
+        return None
