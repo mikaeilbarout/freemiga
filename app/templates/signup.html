@@ -57,6 +57,24 @@
 {% include "_footer.html" %}
 
 <script>
+const REDDIT_TRACKING_ENABLED = {{ (true if reddit_pixel_id else false)|tojson }};
+
+function _getCookie(name) {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function reportRedditSignUp() {
+  if (!REDDIT_TRACKING_ENABLED) return;
+  if (typeof rdt === 'function') rdt('track', 'SignUp');
+  // Best-effort — never blocks the redirect that follows this call.
+  fetch('/api/tracking/reddit-conversion', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({event_type: 'SignUp', click_id: _getCookie('rdt_cid')}),
+  }).catch(() => {});
+}
+
 const SIGNUP_I18N = {
   mismatch: {{ t('signup_passwords_mismatch')|tojson }},
   error: {{ t('signup_error_generic')|tojson }},
@@ -96,6 +114,7 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
     err.style.display = 'block';
     return;
   }
+  reportRedditSignUp();
   window.location.href = wantedPlan ? `/billing?plan=${wantedPlan}` : '/dashboard?verify=pending';
 });
 </script>

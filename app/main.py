@@ -19,7 +19,7 @@ from app.database import Base, engine, SessionLocal
 from app.lang import LANG_COOKIE, SUPPORTED_LANGUAGES, resolve_lang
 from app.limiter import limiter
 from app.models import BlogPost, BlogPostStatus, Customer, Plan
-from app.routers import admin, auth, banners, blog_admin, integrations, orders, payments, plans, support
+from app.routers import admin, auth, banners, blog_admin, integrations, orders, payments, plans, support, tracking
 from app.services.minify import build_minified_assets
 from app.services.telegram import telegram_link_loop
 
@@ -224,6 +224,7 @@ def render(request: Request, template_name: str, *, force_lang: str = None, stat
         "bing_verification": settings.BING_VERIFICATION,
         "google_ads_conversion_id": settings.GOOGLE_ADS_CONVERSION_ID,
         "google_ads_conversion_label": settings.GOOGLE_ADS_CONVERSION_LABEL,
+        "reddit_pixel_id": settings.REDDIT_PIXEL_ID,
         **extra_context,
     }
     response = templates.TemplateResponse(template_name, context, status_code=status_code)
@@ -246,6 +247,7 @@ app.include_router(banners.router)
 app.include_router(banners.admin_router)
 app.include_router(blog_admin.router)
 app.include_router(integrations.router)
+app.include_router(tracking.router)
 
 
 def _seed_plans() -> None:

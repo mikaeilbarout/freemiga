@@ -40,6 +40,26 @@
   }
 </script>
 {%- endif %}
+{%- if reddit_pixel_id and not no_ga %}
+<script>
+  // Reddit's own recommended attribution signal — persist the click ID
+  // from an ad click (?rdt_cid=...) since the signup/purchase that
+  // eventually gets attributed to it usually happens on a later page
+  // load (see routers/tracking.py, which reads this cookie back).
+  (function() {
+    var cid = new URLSearchParams(window.location.search).get('rdt_cid');
+    if (cid) {
+      document.cookie = 'rdt_cid=' + encodeURIComponent(cid) + '; max-age=' + (90 * 24 * 60 * 60) + '; path=/; SameSite=Lax';
+    }
+  })();
+  // Official Reddit Pixel base code — already async/non-blocking by
+  // design (queues calls until pixel.js loads), unlike gtag.js above it
+  // doesn't need a manual 'load'-event deferral.
+  !function(w,d){if(!w.rdt){var p=w.rdt=function(){p.sendEvent?p.sendEvent.apply(p,arguments):p.callQueue.push(arguments)};p.callQueue=[];var t=d.createElement("script");t.src="https://www.redditstatic.com/ads/pixel.js",t.async=!0;var s=d.getElementsByTagName("script")[0];s.parentNode.insertBefore(t,s)}}(window,document);
+  rdt('init', {{ reddit_pixel_id|tojson }});
+  rdt('track', 'PageVisit');
+</script>
+{%- endif %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- Loaded async (preload as style, swap the media on load) instead of a

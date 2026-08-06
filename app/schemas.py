@@ -1,6 +1,6 @@
 import re
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, field_validator, model_validator
 
@@ -371,3 +371,9 @@ class BlogPostAdminOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class RedditConversionIn(BaseModel):
+    event_type: Literal["SignUp", "Purchase"]
+    order_id: Optional[str] = None
+    click_id: Optional[str] = None

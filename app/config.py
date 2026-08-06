@@ -112,6 +112,15 @@ class Settings:
     # purchase. Both empty means the conversion tag is simply omitted.
     GOOGLE_ADS_CONVERSION_ID: str = os.getenv("GOOGLE_ADS_CONVERSION_ID", "")  # e.g. "AW-123456789"
     GOOGLE_ADS_CONVERSION_LABEL: str = os.getenv("GOOGLE_ADS_CONVERSION_LABEL", "")
+    # Reddit Ads Pixel (client-side, _fonts.html) + Conversions API (server
+    # side, see services/reddit_capi.py + routers/tracking.py — CAPI needs
+    # a secret access token so it can't run from the browser). Pixel ID and
+    # CAPI account ID are both from Reddit Ads Manager's Conversions setup
+    # page; the access token is generated there too. All empty = both
+    # omitted, same convention as the Google Ads/GA settings above.
+    REDDIT_PIXEL_ID: str = os.getenv("REDDIT_PIXEL_ID", "")
+    REDDIT_CAPI_ACCOUNT_ID: str = os.getenv("REDDIT_CAPI_ACCOUNT_ID", "")
+    REDDIT_CAPI_ACCESS_TOKEN: str = os.getenv("REDDIT_CAPI_ACCESS_TOKEN", "")
     # IndexNow key — any string you choose. Once set, the site serves
     # GET /{key}.txt (required by the protocol so search engines can
     # confirm you control the domain) and pings IndexNow after each blog
