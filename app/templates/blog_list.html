@@ -8,6 +8,7 @@
 {% set seo_title = t('seo_blog_title') %}
 {% set seo_description = t('seo_blog_description') %}
 {% set breadcrumb_label = t('nav_blog') %}
+{% if page and page > 1 %}{% set canonical_query = "?page=" ~ page %}{% endif %}
 {% include "_seo_head.html" %}
 {% from "_blog_card.html" import blog_card %}
 <style>
