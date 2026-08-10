@@ -97,15 +97,18 @@ _CSP = (
     "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.redditstatic.com; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src 'self' https://fonts.gstatic.com; "
-    "img-src 'self' data: https://www.googletagmanager.com; "
+    # alb.reddit.com is where the Reddit Pixel actually sends its rp.gif
+    # conversion beacon — loaded as an <img>, not fetched, so it belongs
+    # in img-src rather than connect-src.
+    "img-src 'self' data: https://www.googletagmanager.com https://alb.reddit.com; "
     # Where gtag.js actually sends hit data — googletagmanager.com for its
     # own config/collect calls, google-analytics.com (and its region1/2/...
     # subdomains) for the GA4 collect endpoint itself. Without these,
     # gtag.js loads fine but every measurement request it tries to send
     # is blocked the same silent way.
-    # alb.reddit.com / rp.reddit.com are where the Reddit Pixel actually
-    # sends its rp.gif conversion beacon — same rationale as the GA hosts.
-    "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://alb.reddit.com https://rp.reddit.com; "
+    # pixel-config.reddit.com is a config fetch the Reddit Pixel makes on
+    # init, separate from the rp.gif beacon above.
+    "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://pixel-config.reddit.com; "
     "object-src 'none'; "
     "base-uri 'self'; "
     "form-action 'self'; "
