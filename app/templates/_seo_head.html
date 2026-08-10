@@ -13,20 +13,24 @@
      faqs (optional — list of {"q":..., "a":...} dicts, the FAQ page only)
      howto (optional — dict with name/description and a `steps` list of
        {"name":..., "text":...}, the per-device setup guide pages only)
+     canonical_query (optional — e.g. "?page=2" for paginated listings, so
+       each page gets its own canonical instead of every page pointing at
+       page 1, which told Google not to index pages 2+)
    lang_prefix/site_base_url/lang/dir/site_name all come from render(). #}
 {% set seo_image = seo_image if seo_image is defined else (site_base_url ~ "/static/img/og-default.png") %}
-{% set canonical_url = site_base_url ~ request.url.path %}
+{% set canonical_url = site_base_url ~ request.url.path ~ (canonical_query if canonical_query is defined else "") %}
 {% set path_segments = request.url.path.split("/") %}
 {% set is_localized = path_segments|length > 1 and path_segments[1] in ["en", "fa"] %}
 {% set suffix = "/" ~ (path_segments[2:] | join("/")) if is_localized else "" %}
+{% set alt_query = canonical_query if canonical_query is defined else "" %}
 
 <meta name="description" content="{{ seo_description }}">
 <link rel="canonical" href="{{ canonical_url }}">
 
 {% if is_localized %}
-<link rel="alternate" hreflang="en" href="{{ site_base_url }}/en{{ suffix }}">
-<link rel="alternate" hreflang="fa" href="{{ site_base_url }}/fa{{ suffix }}">
-<link rel="alternate" hreflang="x-default" href="{{ site_base_url }}/en{{ suffix }}">
+<link rel="alternate" hreflang="en" href="{{ site_base_url }}/en{{ suffix }}{{ alt_query }}">
+<link rel="alternate" hreflang="fa" href="{{ site_base_url }}/fa{{ suffix }}{{ alt_query }}">
+<link rel="alternate" hreflang="x-default" href="{{ site_base_url }}/en{{ suffix }}{{ alt_query }}">
 {% endif %}
 
 <meta property="og:type" content="website">
