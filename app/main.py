@@ -92,7 +92,9 @@ _CSP = (
     # it here, the browser silently blocks the script (a CSP violation
     # logs to the console, nothing user-visible) and GA never receives a
     # single hit no matter how correctly GA_MEASUREMENT_ID is set.
-    "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; "
+    # redditstatic.com is the Reddit Pixel base script (same file, same
+    # silent-block problem as gtag.js above).
+    "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.redditstatic.com; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src 'self' https://fonts.gstatic.com; "
     "img-src 'self' data: https://www.googletagmanager.com; "
@@ -101,7 +103,9 @@ _CSP = (
     # subdomains) for the GA4 collect endpoint itself. Without these,
     # gtag.js loads fine but every measurement request it tries to send
     # is blocked the same silent way.
-    "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com; "
+    # alb.reddit.com / rp.reddit.com are where the Reddit Pixel actually
+    # sends its rp.gif conversion beacon — same rationale as the GA hosts.
+    "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://alb.reddit.com https://rp.reddit.com; "
     "object-src 'none'; "
     "base-uri 'self'; "
     "form-action 'self'; "
