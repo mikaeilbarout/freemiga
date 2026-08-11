@@ -171,7 +171,7 @@ TEXT = {
         "hero_lead": "No censorship, no throttling, no waiting around. Pick a plan, pay however you like, and you're online in minutes.",
         "hero_cta_primary": "Get started free of hassle",
         "hero_cta_secondary": "View plans",
-        "hero_perk": "New here? Get 1 GB free for a day — no card needed",
+        "hero_perk": "New here? Get 30 GB free for 30 days — no card needed",
         "explore_kicker": "Explore",
         "explore_h2": "Everything you need to know",
         "explore_plans_title": "Plans & pricing",
@@ -190,11 +190,11 @@ TEXT = {
         "cta_band_loggedin_p": "You're already signed in — head to your dashboard to manage your plans and account.",
         "cta_band_loggedin_btn": "Go to dashboard",
         "promo_tag": "🎁 Free trial",
-        "promo_h2": "Try it free — 1 GB, 1 day, zero payment",
+        "promo_h2": "Try it free — 30 GB, 30 days, zero payment",
         "promo_p": "Every new account gets one free trial plan, no card or crypto required. See for yourself before you pay for anything.",
         "promo_cta": "Claim your free plan",
         "promo_claim_btn": "Claim it",
-        "promo_dashboard_text": "You have a free 1 GB / 1-day trial plan waiting — no payment needed.",
+        "promo_dashboard_text": "You have a free 30 GB / 30-day trial plan waiting — no payment needed.",
 
         # Plans page
         "plans_page_title": "Plans & pricing",
@@ -309,7 +309,7 @@ TEXT = {
         "signup_error_generic": "Sign up failed",
         "signup_terms_prefix": "By signing up, you agree to our",
         "signup_terms_link": "terms & conditions",
-        "signup_perk": "Includes a free 1 GB / 1-day trial plan",
+        "signup_perk": "Includes a free 30 GB / 30-day trial plan",
 
         # Dashboard
         "dashboard_page_title": "Dashboard",
@@ -824,7 +824,7 @@ TEXT = {
         "hero_lead": "بدون سانسور، بدون کندی، بدون معطلی. یک پلن انتخاب کن، هرجور دوست داری پرداخت کن، و در چند دقیقه آنلاین باش.",
         "hero_cta_primary": "همین حالا شروع کنید",
         "hero_cta_secondary": "مشاهده پلن‌ها",
-        "hero_perk": "تازه اومدی؟ یک گیگ رایگان برای یک روز بگیر — بدون نیاز به کارت",
+        "hero_perk": "تازه اومدی؟ ۳۰ گیگ رایگان برای ۳۰ روز بگیر — بدون نیاز به کارت",
         "explore_kicker": "بیشتر بدانید",
         "explore_h2": "هر آنچه باید بدانید",
         "explore_plans_title": "پلن‌ها و قیمت‌ها",
@@ -843,11 +843,11 @@ TEXT = {
         "cta_band_loggedin_p": "شما از قبل وارد حساب کاربری خود شده‌اید — برای مدیریت پلن‌ها و حساب کاربری به داشبورد بروید.",
         "cta_band_loggedin_btn": "رفتن به داشبورد",
         "promo_tag": "🎁 تست رایگان",
-        "promo_h2": "رایگان امتحانش کن — ۱ گیگ، ۱ روز، بدون هیچ پرداختی",
+        "promo_h2": "رایگان امتحانش کن — ۳۰ گیگ، ۳۰ روز، بدون هیچ پرداختی",
         "promo_p": "هر حساب جدید یک پلن رایگان دریافت می‌کنه، بدون نیاز به کارت یا ارز دیجیتال. قبل از پرداخت، خودت امتحانش کن.",
         "promo_cta": "دریافت پلن رایگان",
         "promo_claim_btn": "دریافت کن",
-        "promo_dashboard_text": "یک پلن آزمایشی رایگان (۱ گیگ / ۱ روز) منتظرته — بدون نیاز به پرداخت.",
+        "promo_dashboard_text": "یک پلن آزمایشی رایگان (۳۰ گیگ / ۳۰ روز) منتظرته — بدون نیاز به پرداخت.",
 
         # Plans page
         "plans_page_title": "پلن‌ها و قیمت‌ها",
@@ -962,7 +962,7 @@ TEXT = {
         "signup_error_generic": "ثبت‌نام ناموفق بود",
         "signup_terms_prefix": "با ثبت‌نام، شما با",
         "signup_terms_link": "قوانین و مقررات",
-        "signup_perk": "شامل یک پلن آزمایشی رایگان (۱ گیگ / ۱ روز)",
+        "signup_perk": "شامل یک پلن آزمایشی رایگان (۳۰ گیگ / ۳۰ روز)",
 
         # Dashboard
         "dashboard_page_title": "داشبورد",
