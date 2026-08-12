@@ -843,23 +843,24 @@ input:focus, textarea:focus, select:focus {
    (which reused these class names without defining them) rendered
    completely unstyled. Living here once, instead of duplicated per page,
    is what keeps the two grids from drifting out of sync again. */
-/* minmax(min(360px, 100%), ...) — not bare 280px — keeps this grid to a
-   max of 2 columns within the 1100px container at desktop widths. At
-   280px it fit 3 across, which for a typically small (and always
-   even-ish-growing) post count left an orphaned single card alone in the
-   last row with a large empty gap beside it; 2 columns degrades to that
-   same look far less often and matches what this grid already collapses
-   to naturally at tablet widths. The min(360px, 100%) — not a bare
-   360px — matters on narrow viewports: a grid track's minmax minimum is
-   a hard floor it won't shrink below, so bare 360px forced a track wider
-   than a ~375px phone screen (minus page padding) straight into
-   horizontal overflow. Capping the floor at 100% lets it shrink to fit
-   instead, same fix as this project's other minmax(0, 1fr) grids. */
+/* flexbox, not CSS grid: a grid's column *count* is fixed for the whole
+   grid (however many minmax(360px,1fr) tracks fit the 1100px container),
+   so whenever a row has fewer cards than that count — always true for the
+   related-posts grid, which is hardcoded to exactly 3 cards in
+   app/main.py's blog_detail_localized — the leftover cards sit flush at
+   one side of their row with a dead gap beside them; auto-fit vs
+   auto-fill makes no difference here, since it only collapses a track
+   that's empty across the *entire* grid, not one that's merely unused in
+   the last row. flex-wrap does this per row instead: flex-grow lets each
+   row's cards split whatever width is actually left in THAT row, so a
+   lone last card (or any partial row) stretches to fill it symmetrically
+   instead of leaving a gap. flex-basis: min(360px, 100%) keeps the same
+   "wrap around 360px, but shrink to fit on phones" sizing the old grid
+   track had. */
 .blog-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
-  gap: 24px; max-width: 1100px; margin: 0 auto;
+  display: flex; flex-wrap: wrap; gap: 24px; max-width: 1100px; margin: 0 auto;
 }
-.blog-card { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+.blog-card { flex: 1 1 min(360px, 100%); display: flex; flex-direction: column; overflow: hidden; padding: 0; }
 .blog-card-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: var(--panel); display: block; }
 .blog-card-img-placeholder {
   display: flex; align-items: center; justify-content: center;
