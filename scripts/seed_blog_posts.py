@@ -5,17 +5,34 @@ authority around Iran-specific access problems was the one real content gap;
 meta tags, hreflang, FAQ/HowTo schema, and heading structure were already in
 place). Idempotent by slug, like init_db.py's seed_plans() — safe to re-run.
 
+Reuses the existing "VPN & Proxy Guides" category and "VPN"/"Iran" tags
+(same ones seed_best_vpn_iran_blog.py uses, queried by slug, never
+duplicated) instead of a new standalone category — a post in its own
+category never turns up in another post's category-filtered "related
+posts" section (see app/main.py:blog_detail_localized), which is why an
+earlier version of this post, seeded into its own "guides" category, had
+no related-post links to the rest of the blog. Also links out to the
+existing protocol and "best VPN for Iran" posts inline, matching how
+those posts already cross-link to each other.
+
 Run once on the server after a deploy:
     docker compose exec app python -m scripts.seed_blog_posts
 """
 from datetime import datetime, timezone
 
 from app.database import SessionLocal
-from app.models import BlogCategory, BlogPost, BlogPostStatus
+from app.models import BlogCategory, BlogPost, BlogPostStatus, BlogTag
 from app.services.blog import reading_time_minutes, slugify
 
+CATEGORY = {"name_en": "VPN & Proxy Guides", "name_fa": "راهنمای VPN و پروکسی"}
+TAGS = [
+    {"name_en": "VPN", "name_fa": "VPN"},
+    {"name_en": "Iran", "name_fa": "ایران"},
+]
 
-def _get_or_create_category(db, slug: str, name_en: str, name_fa: str) -> BlogCategory:
+
+def _get_or_create_category(db, name_en: str, name_fa: str) -> BlogCategory:
+    slug = slugify(name_en)
     category = db.query(BlogCategory).filter(BlogCategory.slug == slug).first()
     if category:
         return category
@@ -23,6 +40,19 @@ def _get_or_create_category(db, slug: str, name_en: str, name_fa: str) -> BlogCa
     db.add(category)
     db.flush()
     return category
+
+
+def _get_or_create_tags(db, tags: list[dict]) -> list[BlogTag]:
+    result = []
+    for t in tags:
+        slug = slugify(t["name_en"])
+        tag = db.query(BlogTag).filter(BlogTag.slug == slug).first()
+        if not tag:
+            tag = BlogTag(slug=slug, name_en=t["name_en"], name_fa=t["name_fa"])
+            db.add(tag)
+            db.flush()
+        result.append(tag)
+    return result
 
 
 POSTS = [
@@ -70,7 +100,9 @@ fingerprint and block outright, which is why connections can fail even
 with a VPN turned on. Freemiga is built on V2Ray/VLESS/Xray — protocols
 designed specifically to blend in with ordinary encrypted web traffic
 rather than announcing themselves as VPN traffic, which is why they tend
-to keep working on networks where older protocols get flagged.</p>
+to keep working on networks where older protocols get flagged. See
+<a href="/en/blog/v2ray-xray-vless-explained">our breakdown of V2Ray, Xray, and VLESS</a>
+for how that actually works under the hood.</p>
 
 <h2>Setting it up</h2>
 <p>Getting messaging apps working again takes three steps: sign up, pick a
@@ -81,7 +113,9 @@ Freemiga runs a strict no-log policy, and plans can be paid by card or
 with USDT (Tron or Polygon network) if you'd rather not use a card.</p>
 
 <p>Once connected, messaging apps typically reconnect within moments —
-no reinstall or account changes needed.</p>
+no reinstall or account changes needed. If messaging apps aren't the only
+thing you're fighting with, see our full guide to
+<a href="/en/blog/best-vpn-for-iran">what actually keeps a VPN working in Iran</a>.</p>
 """.strip(),
         "content_fa": """
 <p>اپ‌های پیام‌رسانی مثل واتس‌اپ، تلگرام و اینستاگرام در چند سال اخیر، معمولاً
@@ -111,7 +145,7 @@ VPN هم اتصال قطع شود. فریمیگا روی V2Ray/VLESS/Xray ساخ
 که مخصوصاً طوری طراحی شده‌اند که شبیه ترافیک وب رمزنگاری‌شده معمولی به‌نظر
 برسند، نه این‌که خودشان را به‌عنوان ترافیک VPN اعلام کنند، و به همین دلیل
 معمولاً روی شبکه‌هایی که پروتکل‌های قدیمی‌تر شناسایی می‌شوند، همچنان کار
-می‌کنند.</p>
+می‌کنند. برای جزئیات فنی بیشتر، <a href="/fa/blog/v2ray-xray-vless-explained">نگاهی به V2Ray، Xray و VLESS</a> را ببین.</p>
 
 <h2>راه‌اندازی</h2>
 <p>برگرداندن اپ‌های پیام‌رسان به کار سه مرحله دارد: ثبت‌نام، انتخاب یک پلن
@@ -122,7 +156,8 @@ VPN هم اتصال قطع شود. فریمیگا روی V2Ray/VLESS/Xray ساخ
 پرداخت کرد اگر ترجیح می‌دهی از کارت استفاده نکنی.</p>
 
 <p>بعد از وصل شدن، اپ‌های پیام‌رسان معمولاً در عرض چند لحظه دوباره وصل
-می‌شوند — بدون نیاز به نصب دوباره یا تغییر حساب کاربری.</p>
+می‌شوند — بدون نیاز به نصب دوباره یا تغییر حساب کاربری. اگر فقط پیام‌رسان‌ها
+مسئله نیستند، <a href="/fa/blog/best-vpn-for-iran">راهنمای کامل چه چیزی یک VPN را در ایران پایدار نگه می‌دارد</a> را هم ببین.</p>
 """.strip(),
     },
 ]
@@ -131,14 +166,15 @@ VPN هم اتصال قطع شود. فریمیگا روی V2Ray/VLESS/Xray ساخ
 def seed_blog_posts() -> None:
     db = SessionLocal()
     try:
-        guides = _get_or_create_category(db, "guides", "Guides", "راهنماها")
+        category = _get_or_create_category(db, CATEGORY["name_en"], CATEGORY["name_fa"])
+        tags = _get_or_create_tags(db, TAGS)
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         for data in POSTS:
             if db.query(BlogPost).filter(BlogPost.slug == data["slug"]).first():
                 continue
             db.add(BlogPost(
                 slug=slugify(data["slug"]),
-                category_id=guides.id,
+                category_id=category.id,
                 title_en=data["title_en"],
                 title_fa=data["title_fa"],
                 excerpt_en=data["excerpt_en"],
@@ -150,6 +186,7 @@ def seed_blog_posts() -> None:
                 status=BlogPostStatus.published,
                 published_at=now,
                 updated_at=now,
+                tags=tags,
             ))
         db.commit()
     finally:
