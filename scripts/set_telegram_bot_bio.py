@@ -20,16 +20,12 @@ from app.config import settings
 _API_BASE = "https://api.telegram.org"
 
 # Shown on the bot's profile, next to its name (Bot API limit: 120 chars).
-SHORT_DESCRIPTION = "Fast, no-log VPN to bypass censorship. freemiga.com | @freemigacom"
+SHORT_DESCRIPTION = "Fast, no-log VPN to bypass censorship. 30 GB free for 30 days. freemiga.com | @freemigacom"
 
-# Shown on the empty chat screen before a user taps Start (Bot API limit: 512
-# chars). Wording matches the site's own copy — i18n.py's seo_home_description
-# and /llms.txt — not written fresh here.
+# Shown on the empty chat screen before a user taps Start (Bot API limit: 512 chars).
 DESCRIPTION = (
-    "Freemiga — a fast, no-log VPN (V2Ray/VLESS/Xray) for bypassing censorship, "
-    "protecting your privacy, and streaming without restrictions. Plans start "
-    "at $2.99/month, payable by card or crypto. Available on iOS, Android, "
-    "Windows, and macOS.\n\n"
+    "Fast, no-log VPN to bypass censorship\n"
+    "30 GB Free For 30 Days\n"
     "Website: freemiga.com\n"
     "Channel: @freemigacom"
 )
