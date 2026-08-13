@@ -111,6 +111,7 @@ class PaymentMethod(str, enum.Enum):
     crypto = "crypto"
     card = "card"
     free = "free"
+    stars = "stars"
 
 
 class Order(Base):
@@ -137,6 +138,11 @@ class Order(Base):
     # Which chain the customer is paying USDT on — "tron" or "polygon".
     # Only meaningful when payment_method == crypto.
     crypto_network = Column(String, nullable=True)
+
+    # Payment tracking (Telegram Stars). Unique for the same reason tx_hash
+    # is: the hard guarantee that the same Stars payment can never be
+    # credited to two different orders, even under a redelivered update.
+    telegram_charge_id = Column(String, nullable=True, unique=True)
 
     status = Column(Enum(OrderStatus), default=OrderStatus.pending, nullable=False)
 

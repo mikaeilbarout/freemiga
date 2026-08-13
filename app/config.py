@@ -75,6 +75,18 @@ class Settings:
 
     # Direct support contact (shown as buttons in the Telegram bot's support menu)
     TELEGRAM_SUPPORT_USERNAME: str = os.getenv("TELEGRAM_SUPPORT_USERNAME", "")
+
+    # Telegram Stars payments (in-bot purchases via the Bot API's built-in
+    # XTR currency). This is what Telegram's own Affiliate Program pays
+    # commission on — it only ever pays out on Stars purchases made inside
+    # a bot, never on the site's card/crypto checkout — so this is required
+    # for an active affiliate program to do anything.
+    # Stars have no fixed USD exchange rate; ~77 Stars/$1 mirrors Telegram's
+    # own long-standing approximate rate (used for Fragment/Stars
+    # withdrawals) rather than an exact, guaranteed conversion — kept
+    # adjustable here instead of hardcoded in case Telegram's rate moves,
+    # or you want a different margin.
+    TELEGRAM_STARS_PER_USD: float = float(os.getenv("TELEGRAM_STARS_PER_USD", "77"))
     SUPPORT_EMAIL: str = os.getenv("SUPPORT_EMAIL", "")
 
     # Email (Resend) — signup verification

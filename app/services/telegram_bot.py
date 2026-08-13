@@ -30,6 +30,10 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 def _crypto_configured() -> bool:
     return tron_gateway.is_configured() or polygon_gateway.is_configured()
 
+
+def _stars_for_plan(plan: Plan) -> int:
+    return max(1, round(plan.price_usdt * settings.TELEGRAM_STARS_PER_USD))
+
 logger = logging.getLogger("telegram_bot")
 
 # chat_id -> {"lang": "en"|"fa", "state": "...", "plan_id": "...", ...}
@@ -68,12 +72,12 @@ TEXT = {
         "choose_payment": "How would you like to pay for {plan_name} (${price})?",
         "pay_card": "💳 Pay with card",
         "pay_crypto": "🪙 Pay with crypto",
+        "pay_stars": "⭐ Pay with Telegram Stars",
         "pay_card_to_card": "🏦 Card-to-card transfer",
         "card_to_card_instructions": "For a card-to-card transfer, please message our support with the plan you want "
         "({plan_name} — ${price}). They'll send you the account details and confirm your order once the transfer "
         "is received.\n\nSupport: @{support_username}",
         "card_to_card_no_support": "Card-to-card transfer isn't available right now — please contact support from the site instead.",
-        "no_payment_methods": "No payment method is available on this deployment yet — please contact support.",
         "checkout_ready": "Please tap below to complete your ${price} payment for {plan_name}. "
         "This page updates automatically, and we'll let you know here as soon as it's confirmed.",
         "pay_now": "Pay now →",
@@ -136,12 +140,12 @@ TEXT = {
         "choose_payment": "پلن {plan_name} (${price}) رو چطور مایلید پرداخت کنید؟",
         "pay_card": "💳 پرداخت با کارت",
         "pay_crypto": "🪙 پرداخت با کریپتو",
+        "pay_stars": "⭐ پرداخت با Telegram Stars",
         "pay_card_to_card": "🏦 کارت به کارت",
         "card_to_card_instructions": "برای پرداخت کارت به کارت، لطفاً به پشتیبانی ما پیام بدید و پلن مورد نظرتون رو "
         "بگید ({plan_name} — ${price}). شماره کارت رو براتون می‌فرستن و بعد از واریز، سفارشتون رو تأیید می‌کنن.\n\n"
         "پشتیبانی: @{support_username}",
         "card_to_card_no_support": "پرداخت کارت به کارت الان در دسترس نیست — لطفاً از طریق سایت با پشتیبانی تماس بگیرید.",
-        "no_payment_methods": "با عرض پوزش، در حال حاضر روش پرداختی روی این سرویس فعال نشده — لطفاً با پشتیبانی تماس بگیرید.",
         "checkout_ready": "برای تکمیل پرداخت ${price} پلن {plan_name}، لطفاً روی دکمه‌ی زیر بزنید. "
         "این صفحه به‌صورت خودکار به‌روزرسانی میشه و به‌محض تأیید پرداخت، همینجا بهتون اطلاع می‌دیم.",
         "pay_now": "پرداخت →",
@@ -232,6 +236,9 @@ def _payment_kb(lang: str, plan_id: str) -> dict:
         rows.append([{"text": _t(lang, "pay_card"), "callback_data": f"pay:card:{plan_id}"}])
     if _crypto_configured():
         rows.append([{"text": _t(lang, "pay_crypto"), "callback_data": f"pay:crypto:{plan_id}"}])
+    # Stars need no separate gateway config (unlike Stripe/crypto) — the
+    # bot token alone is enough, and we're already inside the bot.
+    rows.append([{"text": _t(lang, "pay_stars"), "callback_data": f"pay:stars:{plan_id}"}])
     # Card-to-card has no automated verification — it only makes sense to
     # offer if there's a support contact to actually message about it.
     if settings.TELEGRAM_SUPPORT_USERNAME:
@@ -357,9 +364,9 @@ async def _show_payment_choice(db, chat_id: str, lang: str, plan: Plan, customer
         if customer:
             await _claim_free_plan(db, chat_id, lang, customer, plan)
         return
-    if not stripe_gateway.is_configured() and not _crypto_configured():
-        await telegram.send_message(chat_id, _t(lang, "no_payment_methods"))
-        return
+    # No "are any payment methods configured?" guard here: Stars needs no
+    # separate gateway, so a payment option is always available once the
+    # bot itself is (which it must be — we're already inside a bot chat).
     await telegram.send_message(
         chat_id,
         _t(lang, "choose_payment", plan_name=plan.name, price=plan.price_usdt),
@@ -448,6 +455,20 @@ async def _start_order(db, chat_id: str, lang: str, customer: Customer, plan_id:
     db.add(order)
     db.commit()
     db.refresh(order)
+
+    if method == "stars":
+        # No hosted checkout page for this one — Telegram renders its own
+        # native "Pay" button on the invoice message itself. The order id
+        # as payload is how _handle_pre_checkout_query / _handle_successful_
+        # payment later find their way back to this exact order.
+        await telegram.send_invoice(
+            chat_id,
+            title=plan.name,
+            description=f"{plan.data_limit_gb} GB · {plan.duration_days} days",
+            payload=order.id,
+            amount_stars=_stars_for_plan(plan),
+        )
+        return
 
     checkout_url = await order_service.create_checkout(db, order, plan)
     # Crypto has no external checkout page anymore (self-hosted USDT wallet,
@@ -767,6 +788,55 @@ async def _handle_callback(db, callback_query: dict) -> None:
         return
 
 
+# ---------- Telegram Stars payment handling ----------
+
+async def _handle_pre_checkout_query(db, pre_checkout_query: dict) -> None:
+    """Telegram requires an answer within 10 seconds of a customer tapping
+    Pay on a Stars invoice, before it actually charges them — the only
+    check that matters here is that the order this invoice's payload
+    points at is still a real, pending order (not already paid, cancelled,
+    or expired out from under it)."""
+    query_id = pre_checkout_query.get("id", "")
+    order_id = pre_checkout_query.get("invoice_payload", "")
+    order = db.query(Order).filter(Order.id == order_id, Order.status == OrderStatus.pending).first()
+    if not order:
+        await telegram.answer_pre_checkout_query(
+            query_id, ok=False, error_message="This order is no longer available — please choose a plan again."
+        )
+        return
+    await telegram.answer_pre_checkout_query(query_id, ok=True)
+
+
+async def _handle_successful_payment(db, message: dict) -> None:
+    """Fires after Telegram has already charged the customer's Stars
+    balance — the payment itself can't be declined from here, only
+    recorded and provisioned. telegram_payment_charge_id is set in its own
+    commit first, same reasoning as verify_payment's tx_hash in
+    routers/orders.py: the column's unique constraint (see
+    scripts/add_stars_payment_support.py) is what actually prevents a
+    replayed update from crediting the same Stars payment twice, not the
+    order-status check above it."""
+    sp = message.get("successful_payment") or {}
+    order_id = sp.get("invoice_payload", "")
+    charge_id = sp.get("telegram_payment_charge_id", "")
+    if not order_id or not charge_id:
+        return
+
+    order = db.query(Order).filter(Order.id == order_id, Order.status == OrderStatus.pending).first()
+    if not order:
+        return
+
+    order.telegram_charge_id = charge_id
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return
+
+    from app.routers.payments import _mark_paid_and_provision
+    await _mark_paid_and_provision(order.id)
+
+
 # ---------- Entry point ----------
 
 async def notify_email_verified(customer: Customer) -> None:
@@ -787,8 +857,13 @@ async def handle_update(update: dict, db) -> None:
     try:
         if "callback_query" in update:
             await _handle_callback(db, update["callback_query"])
+        elif "pre_checkout_query" in update:
+            await _handle_pre_checkout_query(db, update["pre_checkout_query"])
         elif "message" in update:
             message = update["message"]
+            if "successful_payment" in message:
+                await _handle_successful_payment(db, message)
+                return
             chat_id = str(message.get("chat", {}).get("id", ""))
             text = message.get("text", "")
             if chat_id:

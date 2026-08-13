@@ -81,6 +81,47 @@ async def answer_callback_query(callback_query_id: str, text: str | None = None)
             logger.warning("Telegram answerCallbackQuery failed: %s", resp.text)
 
 
+async def send_invoice(chat_id: str, title: str, description: str, payload: str, amount_stars: int) -> None:
+    """Sends a native Telegram Stars invoice (currency "XTR") — the only
+    payment path Telegram's own Affiliate Program pays commission on.
+    provider_token must be present but empty for Stars; amount_stars is a
+    plain integer count of Stars, not a minor-unit amount like normal
+    currencies use."""
+    if not is_configured():
+        logger.debug("Telegram not configured — skipping invoice to %s", chat_id)
+        return
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(
+            f"{_API_BASE}/bot{settings.TELEGRAM_BOT_TOKEN}/sendInvoice",
+            json={
+                "chat_id": chat_id,
+                "title": title,
+                "description": description,
+                "payload": payload,
+                "provider_token": "",
+                "currency": "XTR",
+                "prices": [{"label": title, "amount": amount_stars}],
+            },
+        )
+        if resp.status_code != 200:
+            logger.warning("Telegram sendInvoice failed: %s", resp.text)
+
+
+async def answer_pre_checkout_query(pre_checkout_query_id: str, ok: bool, error_message: str | None = None) -> None:
+    if not is_configured():
+        return
+    payload = {"pre_checkout_query_id": pre_checkout_query_id, "ok": ok}
+    if error_message:
+        payload["error_message"] = error_message
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(
+            f"{_API_BASE}/bot{settings.TELEGRAM_BOT_TOKEN}/answerPreCheckoutQuery",
+            json=payload,
+        )
+        if resp.status_code != 200:
+            logger.warning("Telegram answerPreCheckoutQuery failed: %s", resp.text)
+
+
 def deep_link(customer_id: str) -> str:
     if not settings.TELEGRAM_BOT_USERNAME:
         return ""
