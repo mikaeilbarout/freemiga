@@ -130,6 +130,8 @@
     ,{
       "@type": "Product",
       "name": {{ plan.name|tojson }},
+      "description": {{ t('plan_schema_description', gb=plan.data_limit_gb, days=plan.duration_days)|tojson }},
+      "image": "{{ site_base_url }}/static/img/icon-512.png",
       "brand": { "@type": "Brand", "name": "{{ site_name }}" },
       "category": "VPN subscription",
       "offers": {
@@ -137,7 +139,12 @@
         "url": "{{ canonical_url }}",
         "priceCurrency": "USD",
         "price": "{{ '%.2f'|format(plan.price_usdt) }}",
-        "availability": "https://schema.org/InStock"
+        "availability": "https://schema.org/InStock",
+        "hasMerchantReturnPolicy": {
+          "@type": "MerchantReturnPolicy",
+          "returnPolicyCategory": "https://schema.org/MerchantReturnNotPermitted",
+          "merchantReturnLink": "{{ site_base_url }}{{ lang_prefix }}/refund-policy"
+        }
       }
     }
     {%- endfor %}

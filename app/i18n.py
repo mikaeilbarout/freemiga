@@ -33,6 +33,9 @@ TEXT = {
         "seo_home_description": "Freemiga is a fast, no-log VPN with 24/7 support. Bypass censorship, protect your privacy, and stream freely — plans start at $2.99/month.",
         "seo_plans_title": "VPN Plans & Pricing — Freemiga",
         "seo_plans_description": "Compare Freemiga VPN plans for solo, family, and team use. Pay by card or crypto. Plans start at $2.99/month, no long-term contract.",
+        # Per-plan Product schema description (Merchant listing structured
+        # data — see _seo_head.html) — {gb}/{days} come from the real Plan row.
+        "plan_schema_description": "{gb} GB no-log VPN plan, {days}-day duration — fast servers, easy setup on any device.",
         "seo_how_title": "How Freemiga VPN Works — Setup in Minutes",
         "seo_how_description": "See how Freemiga VPN works: sign up, choose a plan, and connect in minutes on any device. No technical knowledge required.",
         "seo_features_title": "Why Choose Freemiga VPN — No-Log, Fast, Affordable",
@@ -694,6 +697,7 @@ TEXT = {
         "seo_home_description": "فریمیگا یک VPN پرسرعت و بدون ثبت لاگ با پشتیبانی ۲۴ ساعته است. سانسور را دور بزن و از حریم خصوصی‌ات محافظت کن — شروع قیمت از ۲.۹۹ دلار در ماه.",
         "seo_plans_title": "پلن‌ها و قیمت VPN — فریمیگا",
         "seo_plans_description": "پلن‌های VPN فریمیگا را برای استفاده شخصی، خانوادگی و تیمی مقایسه کن. پرداخت با کارت یا کریپتو. شروع از ۲.۹۹ دلار در ماه، بدون قرارداد بلندمدت.",
+        "plan_schema_description": "پلن VPN {gb} گیگابایتی برای {days} روز — بدون لاگ، سرورهای پرسرعت، نصب آسان روی هر دستگاه.",
         "seo_how_title": "روش کار فریمیگا — اتصال در چند دقیقه",
         "seo_how_description": "ببین فریمیگا چطور کار می‌کند: ثبت‌نام کن، پلن انتخاب کن و روی هر دستگاهی در چند دقیقه وصل شو. نیازی به دانش فنی نیست.",
         "seo_features_title": "چرا فریمیگا — بدون لاگ، سریع، مقرون‌به‌صرفه",
