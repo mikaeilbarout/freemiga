@@ -1,6 +1,6 @@
 # Opt-in overlay for the "this host already has its own nginx fronting
-# other sites" deployment path (see README.md, "اگه سرور از قبل یه nginx
-# دیگه داره"). NOT auto-loaded by plain `docker compose` — must be passed
+# other sites" deployment path (see README.md, "If the server already runs
+# a different nginx"). NOT auto-loaded by plain `docker compose` — must be passed
 # explicitly:
 #
 #   docker compose -f docker-compose.yml -f docker-compose.shared-nginx.yml up -d db app

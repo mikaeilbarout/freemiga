@@ -1,8 +1,8 @@
 """
 One-time content update — rewrites the Persian title/excerpt/content of the
 four VPN & Proxy Guides posts (seeded by scripts/seed_vpn_proxy_blog.py) from
-their original casual/colloquial Persian into formal written Persian
-(زبان رسمی), with more detailed, SEO-oriented sections. English fields are
+their original casual/colloquial Persian into formal written Persian,
+with more detailed, SEO-oriented sections. English fields are
 left untouched.
 
 scripts/seed_vpn_proxy_blog.py's seed() is idempotent by slug and skips a

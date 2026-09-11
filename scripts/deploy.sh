@@ -95,7 +95,7 @@ if [ -n "$ports_taken" ]; then
 
     App + Postgres are up and listening internally on :8001 as service
     'app' on the compose network 'freemiga_default'. To finish, follow
-    README.md -> 'اگه سرور از قبل یه nginx دیگه داره':
+    README.md -> 'If the server already runs a different nginx':
       1. docker network create web_shared        # once, if it doesn't exist
       2. docker network connect web_shared \$(docker compose ps -q app)
       3. docker network connect web_shared <existing-nginx-container-name>

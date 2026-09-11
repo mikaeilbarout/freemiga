@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # One command for "pull the latest code and redeploy" that can't forget the
 # docker-compose.shared-nginx.yml overlay — a plain `docker compose up -d app`
-# on a shared-nginx server (see README.md, "اگه سرور از قبل یه nginx دیگه
-# داره") silently drops the app container's `web_shared` network attachment
+# on a shared-nginx server (see README.md, "If the server already runs a
+# different nginx") silently drops the app container's `web_shared` network attachment
 # and its `freemiga_app` alias, taking the site offline until someone
 # notices and manually reconnects it. Detecting the mode here instead of
 # relying on whoever runs the deploy to remember the right `-f` flags is
