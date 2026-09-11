@@ -1,98 +1,108 @@
 # Freemiga
 
-سایت فروش پلن VPN با حساب کاربری کامل: مشتری ثبت‌نام می‌کنه، پلن انتخاب می‌کنه،
-USDT (شبکه ترون یا پالیگان) می‌فرسته، سیستم خودکار پرداخت رو چک می‌کنه و بعد از
-تأیید یه یوزر مستقل و مخصوص همون سفارش تو Marzban می‌سازه.
+A VPN plan sales site with full account management: a customer signs up, picks
+a plan, sends USDT (Tron or Polygon network), the system automatically
+verifies the payment, and once confirmed provisions a dedicated Marzban user
+for that specific order.
 
-## امکانات
+## Features
 
-- **ثبت‌نام/ورود مشتری** — نام کاربری سایت با یوزرنیم‌های VPN فرق داره: هر سفارش
-  یوزرنیم مخصوص خودش تو Marzban می‌سازه (`{یوزرنیم}_{شناسه سفارش}`)، چون هر پلنی
-  که مشتری می‌خره باید کاملاً مستقل از پلن‌های دیگه‌ش باشه — نه با هم ادغام بشن
-- **پنل کاربری**: تاریخچه کامل سفارش‌ها؛ هر پلن خریداری‌شده (چه جدید چه تکراری)
-  اکانت Marzban جدا و مستقل خودشو داره و تو داشبورد هم جدا نمایش داده میشه — با
-  وضعیت زنده‌ی خودش (فعال/غیرفعال/تمام‌شده)
-- **مسدودسازی حساب**: ادمین می‌تونه با یه دلیل مشخص، حساب رو مسدود کنه — هم دسترسی
-  VPN (از طریق Marzban) قطع میشه، هم مشتری همون لحظه تو پنلش پیام دلیل رو می‌بینه
-- **پشتیبانی**: مشتری از پنلش تیکت می‌زنه، ادمین از پنل ادمین جواب می‌ده
-- **پنل ادمین** (`/admin`): مدیریت مشتری‌ها (مسدود/رفع مسدودیت)، دیدن همه
-  سفارش‌ها + تأیید دستی پرداخت (برای وقتی ربات تشخیص پرداخت یه تراکنش رو از دست
-  می‌ده)، و پاسخ به تیکت‌های پشتیبانی
+- **Customer signup/login** — the site username is separate from VPN
+  usernames: each order gets its own Marzban username
+  (`{username}_{order_id}`), because every plan a customer buys needs to be
+  fully independent of their other plans, not merged together
+- **Customer dashboard**: full order history; every purchased plan (new or
+  repeat) has its own independent Marzban account and is shown separately in
+  the dashboard, with its own live status (active/inactive/expired)
+- **Account suspension**: an admin can suspend an account with a specific
+  reason — VPN access (via Marzban) is cut off, and the customer immediately
+  sees the reason message in their dashboard
+- **Support**: customers open tickets from their dashboard, admins reply from
+  the admin panel
+- **Admin panel** (`/admin`): manage customers (suspend/unsuspend), view all
+  orders + manually confirm payment (for when the payment-detection bot
+  misses a transaction), and reply to support tickets
 
-## نحوه کار تشخیص پرداخت
+## How payment detection works
 
-مشتری موقع خرید بین **کارت** و **کریپتو** یکی رو انتخاب می‌کنه:
+At checkout, the customer picks between **card** and **crypto**:
 
-- **کارت** از طریق Stripe — یه صفحه‌ی پرداخت میزبانی‌شده، تأیید خودکار از طریق webhook.
-- **کریپتو (USDT)** — خودمون میزبانی می‌کنیم، نه یه درگاه واسط. مشتری بین دو
-  شبکه یکی رو انتخاب می‌کنه: **ترون (TRC20)** یا **پالیگان (Polygon)** — چون
-  کارمزد این دو شبکه بسته به کیف‌پول/اپی که مشتری استفاده می‌کنه خیلی فرق
-  می‌کنه، دادن هر دو گزینه به مشتری اجازه می‌ده ارزون‌ترینش رو انتخاب کنه.
-  مشتری دقیقاً قیمت پلن رو (به USDT) به آدرس کیف‌پول ما تو همون شبکه می‌فرسته،
-  بعد هش تراکنشش رو تو صفحه‌ی پرداخت پیست می‌کنه. سرور خودکار (از طریق
-  TronGrid برای ترون، یا Etherscan API برای پالیگان) تراکنش رو رو بلاکچین چک
-  می‌کنه — مقصدش آدرس ما باشه، مبلغش کافی باشه، و تأیید شده باشه — و اگه همه‌چی
-  درست بود سفارش رو خودکار تأیید و اکانت VPN رو می‌سازه. چون هش هر تراکنش رو
-  بلاکچین یکتاست، هیچ‌وقت با تطبیق مبلغ اشتباه نمی‌گیره، حتی اگه چند نفر همزمان
-  دقیقاً یه مبلغ رو بفرستن.
+- **Card** via Stripe — a hosted checkout page, confirmed automatically via
+  webhook.
+- **Crypto (USDT)** — self-hosted, not a third-party gateway. The customer
+  picks one of two networks: **Tron (TRC20)** or **Polygon** — since fees on
+  these two networks vary a lot depending on the wallet/app the customer
+  uses, offering both lets them pick the cheaper one. The customer sends the
+  exact plan price (in USDT) to our wallet address on that network, then
+  pastes their transaction hash on the payment page. The server
+  automatically checks the transaction on-chain (via TronGrid for Tron, or
+  the Etherscan API for Polygon) — confirming the destination is our
+  address, the amount is sufficient, and it's confirmed — and if everything
+  checks out, automatically confirms the order and provisions the VPN
+  account. Since every blockchain transaction hash is unique, it never
+  mismatches by amount alone, even if several people send the exact same
+  amount at the same time.
 
-  چرا این‌جوری به‌جای یه درگاه واسط (مثل NowPayments)؟ چون درگاه‌های واسط برای
-  USDT روی هر شبکه‌ای (حتی ارزون‌ترینشون) یه حداقل مبلغ حدود ۱۱-۱۵ دلار
-  می‌ذارن — که برای پلن‌های ارزون (مثلاً ۵ دلاری) اصلاً کار نمی‌کنه. با این روش
-  خودمون، هیچ حداقلی نداریم چون فقط کارمزد واقعی شبکه (چند سنت) رو می‌پردازه
-  خود مشتری، نه یه کارمزد سرویس اضافه.
+  Why this instead of a third-party gateway (like NowPayments)? Because
+  gateways impose a minimum of roughly $11-15 for USDT on any network (even
+  the cheapest), which doesn't work at all for cheap plans (e.g. $5). With
+  this self-hosted approach there's no minimum, since the customer only pays
+  the real network fee (a few cents), not an added service fee.
 
-  **نکته‌ی امنیتی:** ما فقط **آدرس عمومی** کیف‌پول‌ها رو نگه می‌داریم، نه کلید
-  خصوصی‌شون رو — چون فقط داریم تراکنش‌های ورودی رو چک می‌کنیم، نه خرج می‌کنیم.
-  کلید خصوصی باید جای امن (کیف‌پول شخصی، آفلاین) بمونه.
+  **Security note:** we only store the wallets' **public addresses**, never
+  their private keys — since we're only checking incoming transactions, not
+  spending. Private keys should stay somewhere safe (a personal, offline
+  wallet).
 
-### راه‌اندازی پرداخت کریپتو
+### Setting up crypto payments
 
-هر دو شبکه اختیاری‌ان — اگه فقط یکیشون رو تنظیم کنی، همون یکی به مشتری نشون
-داده می‌شه. برای غیرفعال کردن کامل کریپتو، هیچ‌کدوم رو تنظیم نکن.
+Both networks are optional — if you only configure one, only that one is
+shown to customers. To disable crypto entirely, configure neither.
 
-**ترون (TRC20):**
-1. تو `.env` مقدار `TRON_USDT_WALLET_ADDRESS` رو با آدرس عمومی کیف‌پول
-   USDT-TRC20 خودت پر کن (فقط آدرس، نه کلید خصوصی)
-2. تو [trongrid.io](https://www.trongrid.io) یه حساب رایگان بساز و یه API
-   Key بگیر، بذارش تو `TRONGRID_API_KEY`
+**Tron (TRC20):**
+1. In `.env`, set `TRON_USDT_WALLET_ADDRESS` to your USDT-TRC20 wallet's
+   public address (address only, never the private key)
+2. Create a free account at [trongrid.io](https://www.trongrid.io) and get an
+   API key, put it in `TRONGRID_API_KEY`
 
-**پالیگان (Polygon):**
-1. تو `.env` مقدار `POLYGON_USDT_WALLET_ADDRESS` رو با آدرس عمومی کیف‌پول
-   USDT-Polygon خودت پر کن (فقط آدرس، نه کلید خصوصی)
-2. تو [etherscan.io](https://etherscan.io) یه حساب رایگان بساز و یه API Key
-   بگیر (همین کلید برای پالیگان هم کار می‌کنه چون Etherscan API یکپارچه
-   شده)، بذارش تو `POLYGONSCAN_API_KEY`
+**Polygon:**
+1. In `.env`, set `POLYGON_USDT_WALLET_ADDRESS` to your USDT-Polygon wallet's
+   public address (address only, never the private key)
+2. Create a free account at [etherscan.io](https://etherscan.io) and get an
+   API key (the same key works for Polygon since Etherscan's API is
+   unified), put it in `POLYGONSCAN_API_KEY`
 
-بعد از تنظیم هرکدوم، سرویس رو ری‌استارت کن.
+Restart the service after configuring either one.
 
-## نصب رو سرور (VPS) — با Docker
+## Server (VPS) install — with Docker
 
-پشته‌ی کامل: **FastAPI (Gunicorn+Uvicorn) + PostgreSQL + Nginx + Certbot**، همه
-تو Docker Compose.
+Full stack: **FastAPI (Gunicorn+Uvicorn) + PostgreSQL + Nginx + Certbot**, all
+in Docker Compose.
 
-### پیش‌نیاز
-- Docker + Docker Compose رو سرور نصب باشه
-- یه دامنه/ساب‌دامین (مثلاً `freemiga.com`) که رکورد A‌ش به IP سرور اشاره کنه
-- پورت‌های ۸۰ و ۴۴۳ سرور باز باشن
+### Prerequisites
+- Docker + Docker Compose installed on the server
+- A domain/subdomain (e.g. `freemiga.com`) with an A record pointing at the
+  server's IP
+- Ports 80 and 443 open on the server
 
-### ۱. کلون کردن پروژه و تنظیم `.env`
+### 1. Clone the project and set up `.env`
 
-کد رو تو گیت‌هاب نگه می‌داریم: [github.com/mikaeilbarout/freemiga](https://github.com/mikaeilbarout/freemiga)
-(ریپو خصوصیه). رو سرور، به‌جای آپلود دستی فایل‌ها، مستقیم کلون کن:
+Code is kept on GitHub: [github.com/mikaeilbarout/freemiga](https://github.com/mikaeilbarout/freemiga)
+(private repo). On the server, instead of manually uploading files, clone
+directly:
 
 ```bash
 git clone git@github.com:mikaeilbarout/freemiga.git /opt/freemiga
 cd /opt/freemiga
 ```
 
-چون ریپو خصوصیه، سرور به یه **Deploy Key** نیاز داره (یه کلید SSH فقط-خواندنی
-مخصوص همین ریپو — نه پسورد یا access token شخصی):
+Since the repo is private, the server needs a **Deploy Key** (a read-only SSH
+key scoped to this repo — not a personal password or access token):
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/github_deploy -N "" -C "your-server-deploy"
-cat ~/.ssh/github_deploy.pub   # این رو تو GitHub → Settings → Deploy keys → Add deploy key اضافه کن (Read-only)
+cat ~/.ssh/github_deploy.pub   # add this under GitHub → Settings → Deploy keys → Add deploy key (Read-only)
 ```
-بعدش تو `~/.ssh/config` این رو اضافه کن تا git خودش از این کلید استفاده کنه:
+Then add this to `~/.ssh/config` so git uses this key automatically:
 ```
 Host github.com
   HostName github.com
@@ -101,179 +111,202 @@ Host github.com
   IdentitiesOnly yes
 ```
 
-بعد `.env` رو بساز:
+Then create `.env`:
 ```bash
 cp .env.example .env
-python3 -c "import secrets; print(secrets.token_hex(32))"   # → SESSION_SECRET
-python3 -c "import secrets; print(secrets.token_urlsafe(24))"   # → POSTGRES_PASSWORD
+python3 -c "import secrets; print(secrets.token_hex(32))"   # -> SESSION_SECRET
+python3 -c "import secrets; print(secrets.token_urlsafe(24))"   # -> POSTGRES_PASSWORD
 nano .env
 ```
-تو `nginx/conf.d/freemiga.conf` هم `server_name` رو با دامنه‌ی واقعیت جایگزین کن
-(اگه دامنه‌ت `freemiga.com` نیست).
+Also replace `server_name` in `nginx/conf.d/freemiga.conf` with your actual
+domain (if it isn't `freemiga.com`).
 
-**مهم:** فایل `docker-compose.override.yml` فقط برای دولوپ محلیه (اپ رو مستقیم
-و بدون nginx/TLS رو پورت ۸۰۰۲ باز می‌کنه) — قبل از اجرا رو سرور پروداکشن حتماً
-حذفش کن، وگرنه هرکسی می‌تونه مستقیم به اپ وصل بشه و هدرهای
-`X-Forwarded-For`/`X-Real-IP` رو جعل کنه.
+**Important:** `docker-compose.override.yml` is for local development only
+(exposes the app directly, without nginx/TLS, on port 8002) — make sure to
+remove it before running on a production server, otherwise anyone can
+connect directly to the app and spoof the `X-Forwarded-For`/`X-Real-IP`
+headers.
 
-**اگه سرور از قبل یه nginx دیگه داره** (مثلاً یه سایت دیگه‌ی همین صاحب سرور رو
-پورت ۸۰/۴۴۳ نشسته — دقیقاً وضعیت فعلی این سرور، که `shop.persepolisconstruction.co.uk`
-کنار `persepolisconstruction.co.uk` خودش و پنل Marzban هاست می‌شه): مراحل بالا
-(nginx/certbot خودِ این پروژه) رو اجرا نکن. به‌جاش از overlay آماده‌ی
-`docker-compose.shared-nginx.yml` استفاده کن (توضیحش رو بخون — alias
-`freemiga_app` که توش تعریف شده باید دقیقاً با `proxy_pass` نگینکس موجود یکی باشه):
-1. یه‌بار: `docker network create web_shared` (اگه از قبل نیست)
+**If the server already runs a different nginx** (e.g. another site owned by
+the same server operator sitting on port 80/443 — exactly this server's
+current situation, where `shop.persepolisconstruction.co.uk` is hosted
+alongside `persepolisconstruction.co.uk` itself and the Marzban panel): don't
+run the steps above (this project's own nginx/certbot). Instead, use the
+ready-made overlay `docker-compose.shared-nginx.yml` (read its comments —
+the `freemiga_app` alias defined in it must exactly match the existing
+nginx's `proxy_pass`):
+1. Once: `docker network create web_shared` (if it doesn't already exist)
 2. `docker compose -f docker-compose.yml -f docker-compose.shared-nginx.yml up -d db app`
-   — این جای مرحله‌ی «بالا آوردن اپ و دیتابیس» پایین رو می‌گیره؛ nginx/certbot خودِ
-   این پروژه رو دیگه بالا نیار
-3. همون nginx موجود رو هم به همون شبکه وصل کن (یه‌بار): `docker network connect web_shared <nginx-container>`
-4. یه فایل کانفیگ جدید (مثل `nginx/conf.d/freemiga.conf` همین پروژه) رو کپی
-   کن تو پوشه‌ی conf.d همون nginx موجود، با `proxy_pass http://freemiga_app:8001`
-5. برای گواهی SSL از همون certbot موجود استفاده کن:
+   — this replaces the "bring up the app and database" step below; don't
+   bring up this project's own nginx/certbot
+3. Connect the existing nginx to the same network too (once):
+   `docker network connect web_shared <nginx-container>`
+4. Copy a new config file (like this project's own
+   `nginx/conf.d/freemiga.conf`) into that existing nginx's conf.d folder,
+   with `proxy_pass http://freemiga_app:8001`
+5. Use the existing certbot for the SSL certificate:
    `docker compose run --rm --entrypoint certbot certbot certonly --webroot -w /var/www/certbot -d shop.persepolisconstruction.co.uk`
-6. چون معمولاً پورت ۴۴۳ واقعی رو یه سرویس دیگه (مثلاً Xray/Marzban) قبضه کرده،
-   دامنه رو از پشت Cloudflare رد کن و با یه Origin Rule ترافیک ۴۴۳ رو به همون
-   پورتی که nginx موجود واقعاً روش گوش می‌ده (مثلاً ۸۴۴۴) هدایت کن.
+6. Since another service (e.g. Xray/Marzban) usually already owns the real
+   port 443, route the domain through Cloudflare and use an Origin Rule to
+   redirect port 443 traffic to whatever port the existing nginx actually
+   listens on (e.g. 8444).
 
-**نکته‌ی مهم:** چون alias شبکه فقط با استفاده از هر دو فایل کامپوز (`-f
-docker-compose.yml -f docker-compose.shared-nginx.yml`) تعریف می‌شه، هر آپدیت
-بعدی (`docker compose build/up -d app`) هم باید با همین دو `-f` زده بشه —
-وگرنه recreate کانتینر اتصالش به `web_shared` رو از دست می‌ده و سایت آفلاین
-می‌شه تا دوباره دستی وصلش کنی.
+**Important note:** since the network alias is only defined when using both
+compose files together (`-f docker-compose.yml -f
+docker-compose.shared-nginx.yml`), every subsequent update (`docker compose
+build/up -d app`) must also be run with both `-f` flags — otherwise
+recreating the container loses its connection to `web_shared` and the site
+goes offline until you manually reconnect it.
 
-### ۲. بالا آوردن اپ و دیتابیس (بدون nginx هنوز)
+### 2. Bring up the app and database (without nginx yet)
 ```bash
 docker compose up -d db app
-docker compose logs -f app   # باید "Database schema ready." و بعدش ورکرهای gunicorn رو ببینی
+docker compose logs -f app   # you should see "Database schema ready." followed by gunicorn workers
 ```
 
-### ۳. گرفتن گواهی HTTPS واقعی (فقط بار اول)
+### 3. Get a real HTTPS certificate (first time only)
 ```bash
 CERTBOT_EMAIL=you@example.com ./scripts/init-letsencrypt.sh
 ```
-این اسکریپت یه گواهی موقت می‌سازه تا nginx بالا بیاد، بعد گواهی واقعی رو از
-Let's Encrypt می‌گیره و nginx رو reload می‌کنه. فقط یه بار لازمه.
+This script creates a temporary certificate so nginx can start, then fetches
+the real certificate from Let's Encrypt and reloads nginx. Only needed once.
 
-### ۴. اجرای کامل
+### 4. Full run
 ```bash
 docker compose up -d
 docker compose ps
 ```
-حالا `https://freemiga.com` باید بالا باشه. سرویس `certbot` خودش هر ۱۲ ساعت
-چک می‌کنه و گواهی رو قبل از انقضا تمدید می‌کنه — کار دستی لازم نیست.
+`https://freemiga.com` should now be up. The `certbot` service checks every
+12 hours and renews the certificate before it expires — no manual work
+needed.
 
-### به‌روزرسانی بعد از تغییر کد
+### Updating after a code change
 ```bash
 ./deploy.sh
 ```
-این اسکریپت `git pull` می‌زنه و خودش تشخیص می‌ده سرور از سناریوی "nginx
-مشترک" استفاده می‌کنه یا نه (با چک‌کردن وجود شبکه‌ی `web_shared`)، و بر همون
-اساس فلگ‌های `-f` درست رو خودش می‌زنه — نیازی نیست دستی یادت بمونه. اگه
-دسترسی docker نیاز به sudo داره: `sudo ./deploy.sh`.
+This script runs `git pull` and automatically detects whether the server is
+using the "shared nginx" scenario (by checking whether the `web_shared`
+network exists), and applies the right `-f` flags accordingly — no need to
+remember it manually. If docker access needs sudo: `sudo ./deploy.sh`.
 
-**چرا این مهمه:** روی سناریوی "nginx مشترک"، اگه `docker compose up -d app`
-بدون `-f docker-compose.yml -f docker-compose.shared-nginx.yml` زده بشه،
-کانتینر recreate می‌شه و alias `freemiga_app` روی شبکه‌ی `web_shared` رو گم
-می‌کنه — سایت آفلاین می‌شه تا دستی با `docker network connect --alias
-freemiga_app web_shared <container>` دوباره وصلش کنی. `deploy.sh` دقیقاً
-برای جلوگیری از همین اشتباه ساخته شده.
+**Why this matters:** in the "shared nginx" scenario, if `docker compose up
+-d app` is run without `-f docker-compose.yml -f
+docker-compose.shared-nginx.yml`, the container gets recreated and loses the
+`freemiga_app` alias on the `web_shared` network — the site goes offline
+until you manually reconnect it with `docker network connect --alias
+freemiga_app web_shared <container>`. `deploy.sh` exists specifically to
+prevent this mistake.
 
-### دیدن لاگ‌ها
+### Viewing logs
 ```bash
 docker compose logs -f app
 ```
 
-## صفحات سایت
+## Site pages
 
-| مسیر | چیه |
+| Path | What it is |
 |---|---|
-| `/` | ورود مشتری |
-| `/signup` | ثبت‌نام مشتری |
-| `/dashboard` | پنل کاربری (خرید/تمدید، تاریخچه، پشتیبانی) |
-| `/pay/{order_id}` | صفحه پرداخت یه سفارش خاص |
-| `/admin` | پنل ادمین (یوزر/پسورد از `.env`) |
+| `/` | Customer login |
+| `/signup` | Customer signup |
+| `/dashboard` | Customer dashboard (buy/renew, history, support) |
+| `/pay/{order_id}` | Payment page for a specific order |
+| `/admin` | Admin panel (username/password from `.env`) |
 
-## ویرایش پلن‌ها
+## Editing plans
 
 ```bash
 sqlite3 /opt/freemiga/freemiga.db
-UPDATE plans SET price_usdt=7 WHERE name='پایه';
+UPDATE plans SET price_usdt=7 WHERE name='Basic';
 ```
 
-## راه‌اندازی ربات تلگرام (اختیاری ولی توصیه‌شده)
+## Setting up the Telegram bot (optional but recommended)
 
-برای اینکه مشتری‌ها خودکار پیام بگیرن (تحویل سرویس، اطلاع مسدودی، کد بازیابی رمز):
+So customers automatically get messages (service delivery, suspension
+notice, password reset code):
 
-1. تو تلگرام به [@BotFather](https://t.me/BotFather) پیام بده
-2. `/newbot` بزن، یه اسم و یوزرنیم (باید به `bot` ختم بشه) انتخاب کن — رباتت `@FreemigaBot` هست
-3. BotFather یه **توکن** میده (چیزی شبیه `123456:ABC-DEF...`) — بذارش تو `.env`:
+1. Message [@BotFather](https://t.me/BotFather) on Telegram
+2. Run `/newbot`, pick a name and username (must end in `bot`) — our bot is
+   `@FreemigaBot`
+3. BotFather gives you a **token** (something like `123456:ABC-DEF...`), put
+   it in `.env`:
    ```
    TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
    TELEGRAM_BOT_USERNAME=FreemigaBot
    ```
-4. سرویس رو ری‌استارت کن — از این به بعد، تو داشبورد مشتری‌ها یه دکمه "اتصال به ربات تلگرام" ظاهر میشه
+4. Restart the service — from now on, a "Connect to Telegram bot" button
+   appears in the customer dashboard
 
-### دریافت اطلاعیه خودت (سفارش/تیکت جدید)
+### Getting your own notifications (new orders/tickets)
 
-اگه می‌خوای خودت هم تلگرامی از سفارش‌ها و تیکت‌های جدید باخبر بشی:
-1. تو تلگرام یه پیام (هر چیزی، حتی `/start`) به ربات خودت (`@FreemigaBot`) بفرست
-2. این آدرس رو تو مرورگر باز کن (به‌جای `<TOKEN>` توکن واقعی ربات رو بذار):
+If you want to be notified on Telegram about new orders and tickets
+yourself:
+1. Send any message (even `/start`) to your bot (`@FreemigaBot`) on Telegram
+2. Open this URL in your browser (replace `<TOKEN>` with the bot's actual
+   token):
    ```
    https://api.telegram.org/bot<TOKEN>/getUpdates
    ```
-3. تو خروجی JSON دنبال `"chat":{"id":123456789` بگرد — همون عدد رو تو `.env` بذار:
+3. In the JSON output, look for `"chat":{"id":123456789` — put that number in
+   `.env`:
    ```
    ADMIN_TELEGRAM_CHAT_ID=123456789
    ```
-4. سرویس رو ری‌استارت کن
+4. Restart the service
 
-اگه این دو متغیر رو خالی بذاری، سایت کاملاً عادی کار می‌کنه، فقط اطلاع‌رسانی تلگرام و بازیابی رمز از این طریق غیرفعال می‌مونه (مشتری قفل‌شده می‌تونه از فرم "تماس با پشتیبانی" تو صفحه ورود کمک بگیره).
+If you leave these two variables empty, the site works completely normally —
+only Telegram notifications and password recovery via this route are
+disabled (a locked-out customer can still get help via the "contact support"
+form on the login page).
 
-## پشتیبان‌گیری خودکار از دیتابیس
+## Automatic database backups
 
-اسکریپت `backup.sh` رو قابل‌اجرا کن و به کرون اضافه کن (مثلاً هر شب ساعت ۳ بامداد):
+Make `backup.sh` executable and add it to cron (e.g. every night at 3am):
 ```bash
 chmod +x /opt/freemiga/backup.sh
 crontab -e
 ```
-این خط رو اضافه کن:
+Add this line:
 ```
 0 3 * * * /opt/freemiga/backup.sh >> /var/log/freemiga-backup.log 2>&1
 ```
-بکاپ‌ها (فایل `.sql.gz`) تو `/opt/freemiga/backups/` ذخیره می‌شن و بکاپ‌های بیشتر از ۳۰ روز خودکار پاک می‌شن.
+Backups (`.sql.gz` files) are stored in `/opt/freemiga/backups/` and backups
+older than 30 days are automatically deleted.
 
-برای بازگردانی یه بکاپ:
+To restore a backup:
 ```bash
 gunzip -c backups/freemiga_20260101_030000.sql.gz | docker compose exec -T db psql -U freemiga freemiga
 ```
 
-## زبان سایت (فارسی/انگلیسی)
+## Site language (Persian/English)
 
-سایت کاملاً دوزبانه‌ست (فارسی/انگلیسی، با راست‌چین خودکار برای فارسی). زبان
-پیش‌فرض هر بازدیدکننده جدید این‌جوری تعیین میشه:
+The site is fully bilingual (Persian/English, with automatic RTL for
+Persian). Each new visitor's default language is determined like this:
 
-1. اگه یه کوکی زبان از قبل داره (چون قبلاً دستی عوض کرده)، همون رو نشون میده
-2. وگرنه، آی‌پی‌ش رو با یه دیتابیس GeoIP آفلاین چک می‌کنه — اگه کشورش تو
-   `PERSIAN_COUNTRIES` باشه (پیش‌فرض: ایران و افغانستان)، فارسی نشون میده
-3. وگرنه انگلیسی (`DEFAULT_LANGUAGE`)
+1. If they already have a language cookie (from a previous manual switch),
+   that's shown
+2. Otherwise, their IP is checked against an offline GeoIP database — if
+   their country is in `PERSIAN_COUNTRIES` (default: Iran and Afghanistan),
+   Persian is shown
+3. Otherwise English (`DEFAULT_LANGUAGE`)
 
-مشتری همیشه می‌تونه از دکمه‌ی زبون تو نوار بالای سایت دستی عوض کنه — بعدش
-دیگه از GeoIP استفاده نمیشه و انتخابش تو کوکی ذخیره می‌مونه. پنل ادمین
-(`/admin`) همیشه انگلیسیه، مستقل از زبون بازدیدکننده.
+Customers can always switch manually from the language button in the site's
+top bar — after that, GeoIP is no longer used and their choice is stored in
+a cookie. The admin panel (`/admin`) is always in English, regardless of the
+visitor's language.
 
-### راه‌اندازی GeoIP (اختیاری، ولی توصیه‌شده)
+### Setting up GeoIP (optional, but recommended)
 
-بدون این فایل، سایت کاملاً عادی کار می‌کنه، فقط بازدیدکننده‌های جدید همیشه
-انگلیسی می‌بینن (به‌جای تشخیص خودکار از روی کشورشون).
+Without this file, the site works completely normally — new visitors just
+always see English (instead of automatic detection based on their country).
 
-1. تو [maxmind.com/en/geolite2/signup](https://www.maxmind.com/en/geolite2/signup)
-   یه حساب رایگان بساز
-2. از پنل حسابت یه **License Key** بگیر
-3. دیتابیس `GeoLite2-Country.mmdb` رو دانلود کن (فرمت "GeoIP2 Binary (.mmdb)")
-4. فایل رو تو مسیر `app/data/GeoLite2-Country.mmdb` پروژه بذار
-5. `docker compose build app && docker compose up -d app` بزن
+1. Create a free account at [maxmind.com/en/geolite2/signup](https://www.maxmind.com/en/geolite2/signup)
+2. Get a **License Key** from your account panel
+3. Download the `GeoLite2-Country.mmdb` database (the "GeoIP2 Binary (.mmdb)"
+   format)
+4. Place the file at `app/data/GeoLite2-Country.mmdb` in the project
+5. Run `docker compose build app && docker compose up -d app`
 
-### متغیرهای مربوطه تو `.env`
+### Related variables in `.env`
 
 ```
 GEOIP_DB_PATH=app/data/GeoLite2-Country.mmdb
@@ -281,22 +314,31 @@ DEFAULT_LANGUAGE=en
 PERSIAN_COUNTRIES=IR,AF
 ```
 
-## سختی‌های اعمال‌شده برای تولید واقعی (Production Hardening)
+## Production hardening
 
-- **تک‌پروسه‌بودن تضمین‌شده**: چک پرداخت و پولینگ تلگرام از یه قفل فایلی استفاده می‌کنن، پس حتی اگه اشتباهی با چند Worker بالا بیای، فقط یکی واقعاً کار می‌کنه
-- **کوکی امن**: `SESSION_COOKIE_SECURE=true` در production کوکی لاگین رو فقط رو HTTPS می‌فرسته
-- **جلوگیری از تراکنش تکراری**: یه تراکنش بلاک‌چین هیچ‌وقت دوبار برای دو سفارش مختلف قبول نمیشه (هم چک نرم‌افزاری هم قید یکتای دیتابیس)
-- **محدودیت تلاش ورود**: لاگین/ثبت‌نام/بازیابی رمز محدود به چند تلاش در دقیقه‌ست (جلوی حدس زدن رمز رو می‌گیره)
-- **بازسازی خودکار**: اگه دقیقاً همون یوزرنیم یه سفارش (که شامل شناسه سفارشه، پس برخوردش عملاً غیرممکنه) از قبل تو Marzban موجود باشه، به‌جای خطا، به‌جاش تمدیدش می‌کنه
-- **گزارش اقدامات ادمین**: هر ban/unban/تأیید دستی/پاسخ تیکت تو تب "گزارش اقدامات" پنل ادمین ثبت میشه
+- **Guaranteed single-process**: payment checking and Telegram polling use a
+  file lock, so even if you accidentally bring up multiple workers, only one
+  actually runs
+- **Secure cookies**: `SESSION_COOKIE_SECURE=true` in production only sends
+  the login cookie over HTTPS
+- **Duplicate-transaction prevention**: a blockchain transaction is never
+  accepted twice for two different orders (both a software check and a
+  unique database constraint)
+- **Login rate limiting**: login/signup/password-recovery are limited to a
+  few attempts per minute (prevents password guessing)
+- **Automatic recovery**: if a Marzban username for an order (which includes
+  the order id, so collisions are effectively impossible) already exists,
+  it's renewed instead of erroring out
+- **Admin action log**: every ban/unban/manual confirmation/ticket reply is
+  logged in the admin panel's "Action Log" tab
 
-## نکات امنیتی مهم
+## Important security notes
 
-- فایل `.env` شامل پسورد ادمین Marzban و پسورد پنل ادمین این سایته —
-  `chmod 600 .env` بزن و هیچ‌وقت جایی به اشتراک نذارش
-- بعد از هر تغییر تو `.env`: `sudo systemctl restart freemiga`
-- لاگ‌های سرویس: `journalctl -u freemiga -f`
-- اگه مسدودسازی/رفع‌مسدودی یه مشتری رو زدی ولی هنوز اکانت Marzban نداره
-  (هنوز اولین خریدش رو نکرده)، فقط تو دیتابیس این سایت مسدود میشه؛ همین که اولین
-  بار پرداخت کنه و اکانتش ساخته بشه، وضعیت مسدودیتش رو Marzban هم اعمال میشه.
-
+- The `.env` file contains the Marzban admin password and this site's admin
+  panel password — run `chmod 600 .env` and never share it anywhere
+- After any change to `.env`: `sudo systemctl restart freemiga`
+- Service logs: `journalctl -u freemiga -f`
+- If you suspend/unsuspend a customer who doesn't have a Marzban account yet
+  (hasn't made their first purchase), only this site's database is updated;
+  as soon as they pay for the first time and their account is created, the
+  suspension status is also applied in Marzban.
