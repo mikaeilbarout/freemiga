@@ -9,7 +9,12 @@ class Settings:
     MARZBAN_BASE_URL: str = os.getenv("MARZBAN_BASE_URL", "https://panel.freemiga.com:8000")
     MARZBAN_ADMIN_USERNAME: str = os.getenv("MARZBAN_ADMIN_USERNAME", "")
     MARZBAN_ADMIN_PASSWORD: str = os.getenv("MARZBAN_ADMIN_PASSWORD", "")
-    MARZBAN_INBOUND_TAG: str = os.getenv("MARZBAN_INBOUND_TAG", "VLESS_WS_TLS")
+    # Comma-separated list — every tag here gets assigned to each new/renewed
+    # user, so their subscription includes all of them (e.g. both the
+    # Cloudflare-fronted WS_TLS inbound and the REALITY one).
+    MARZBAN_INBOUND_TAGS: list[str] = [
+        t.strip() for t in os.getenv("MARZBAN_INBOUND_TAGS", "VLESS_WS_TLS,VLESS_REALITY").split(",") if t.strip()
+    ]
 
     # Crypto payment — self-hosted USDT (TRC20) wallet. Customer sends the
     # exact plan price to this address, then submits their transaction hash

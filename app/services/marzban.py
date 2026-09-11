@@ -54,7 +54,7 @@ async def create_vpn_user(username: str, data_limit_gb: int, duration_days: int)
     payload = {
         "username": username,
         "proxies": {"vless": {"flow": ""}},
-        "inbounds": {"vless": [settings.MARZBAN_INBOUND_TAG]},
+        "inbounds": {"vless": settings.MARZBAN_INBOUND_TAGS},
         "expire": expire_ts,
         "data_limit": data_limit_bytes,
         "data_limit_reset_strategy": "no_reset",
