@@ -3,8 +3,6 @@ Shared order-checkout logic used by both the web API (routers/orders.py)
 and the Telegram bot (services/telegram_bot.py), so both surfaces create
 hosted payment sessions the exact same way.
 """
-from datetime import datetime, timedelta
-
 import httpx
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
@@ -34,26 +32,19 @@ async def has_usable_free_plan(db: Session, customer: Customer, plan: Plan) -> b
     reached, this fails closed (counts as usable) rather than handing out
     a second free plan it couldn't verify.
 
-    A free plan the customer deleted themselves still counts until the date
-    it would naturally have expired — otherwise deleting and re-claiming
-    would be a way to reset its data allowance on demand.
+    A free plan the customer deleted themselves (status "removed") doesn't
+    count — deleting it frees them to claim a new one right away.
     """
     orders = (
         db.query(Order)
         .filter(
             Order.customer_id == customer.id,
             Order.plan_id == plan.id,
-            Order.status.in_([
-                OrderStatus.pending, OrderStatus.paid, OrderStatus.provisioned, OrderStatus.removed,
-            ]),
+            Order.status.in_([OrderStatus.pending, OrderStatus.paid, OrderStatus.provisioned]),
         )
         .all()
     )
     for order in orders:
-        if order.status == OrderStatus.removed:
-            if order.paid_at and order.paid_at + timedelta(days=plan.duration_days) > datetime.utcnow():
-                return True
-            continue
         if order.status != OrderStatus.provisioned:
             return True
         try:
