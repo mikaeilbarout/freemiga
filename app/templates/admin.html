@@ -131,6 +131,7 @@
           <option value="paid">Paid</option>
           <option value="provisioned">Active</option>
           <option value="expired">Expired</option>
+          <option value="removed">Removed by customer</option>
           <option value="failed">Failed</option>
         </select>
         <span class="list-count" id="orderCount"></span>
@@ -437,7 +438,7 @@ async function unban(id) {
 }
 
 function statusLabel(s) {
-  return {pending: 'Pending', paid: 'Paid', provisioned: 'Active', expired: 'Expired', failed: 'Failed', cancelled: 'Cancelled'}[s] || s;
+  return {pending: 'Pending', paid: 'Paid', provisioned: 'Active', expired: 'Expired', failed: 'Failed', cancelled: 'Cancelled', removed: 'Removed by customer'}[s] || s;
 }
 
 function orderRowHtml(o) {

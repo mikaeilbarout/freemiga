@@ -105,6 +105,9 @@ class OrderStatus(str, enum.Enum):
     expired = "expired"
     failed = "failed"
     cancelled = "cancelled"
+    # The customer deleted this plan from their dashboard — its Marzban
+    # account is gone, but the order row stays for bookkeeping.
+    removed = "removed"
 
 
 class PaymentMethod(str, enum.Enum):

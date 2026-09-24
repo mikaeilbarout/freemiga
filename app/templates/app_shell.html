@@ -467,6 +467,17 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="removePlanModal" style="display:none">
+  <div class="card modal-box">
+    <h3>{{ t('remove_plan_modal_title') }}</h3>
+    <p id="removePlanModalMsg"></p>
+    <div class="row gap-8" style="justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeRemovePlanModal()">{{ t('remove_plan_modal_cancel') }}</button>
+      <button class="btn btn-danger" id="removePlanConfirmBtn" onclick="confirmRemovePlan()">{{ t('remove_plan_modal_confirm') }}</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="pendingOrderModal" style="display:none">
   <div class="card modal-box">
     <h3>{{ t('pending_order_modal_title') }}</h3>
@@ -582,6 +593,10 @@ const DASH_I18N = {
   vpnLinkCopied: {{ t('dashboard_link_copied')|tojson }},
   copyLink: {{ t('pay_copy_link')|tojson }},
   renewPlan: {{ t('dashboard_renew_plan')|tojson }},
+  removePlan: {{ t('dashboard_remove_plan')|tojson }},
+  planRemoved: {{ t('dashboard_plan_removed')|tojson }},
+  removeFailed: {{ t('err_remove_failed')|tojson }},
+  removePlanMsg: {{ t('remove_plan_modal_msg', name='__NAME__')|tojson }},
   orderPendingName: {{ t('dashboard_order_pending_name')|tojson }},
   orderPendingSub: {{ t('dashboard_order_pending_sub')|tojson }},
   completePayment: {{ t('dashboard_complete_payment')|tojson }},
@@ -596,6 +611,7 @@ const DASH_I18N = {
     expired: {{ t('status_expired')|tojson }},
     failed: {{ t('status_failed')|tojson }},
     cancelled: {{ t('status_cancelled')|tojson }},
+    removed: {{ t('status_removed')|tojson }},
   },
   renewal: {{ t('order_renewal')|tojson }},
   newPurchase: {{ t('order_new_purchase')|tojson }},
@@ -668,7 +684,7 @@ function statusHeroCta(extraAttrs) {
   return `onclick="event.preventDefault();activateSection('billing',{pushHistory:true})" ${extraAttrs || ''}`;
 }
 
-function statusHeroCard({ badge, badgeClass, name, sub, ctaLabel, ctaHref, ctaOnclick, linkBtn }) {
+function statusHeroCard({ badge, badgeClass, name, sub, ctaLabel, ctaHref, ctaOnclick, linkBtn, removeOrderId, removeName }) {
   return `
     <div class="card status-hero">
       <div class="status-hero-top">
@@ -682,6 +698,7 @@ function statusHeroCard({ badge, badgeClass, name, sub, ctaLabel, ctaHref, ctaOn
         <div class="status-hero-actions">
           ${linkBtn ? `<button class="btn btn-ghost btn-sm" data-link="${linkBtn}" onclick="copyOrderLink(this)">${DASH_I18N.copyLink}</button>` : ''}
           <a class="btn btn-primary btn-sm" href="${ctaHref}" ${ctaOnclick}>${ctaLabel}</a>
+          ${removeOrderId ? `<button class="btn btn-ghost btn-sm" data-order-id="${removeOrderId}" data-name="${removeName || ''}" onclick="openRemovePlanModal(this)">${DASH_I18N.removePlan}</button>` : ''}
         </div>
       </div>
     </div>`;
@@ -710,6 +727,10 @@ function renderPlanCard(p, { banned, plan, order }) {
     });
   }
 
+  // Every card except a suspended one gets a Delete button (a suspended
+  // customer's accounts are the admin's to manage — the API refuses too).
+  const removable = { removeOrderId: p.order_id, removeName: planName };
+
   // p.has_account reflects Marzban directly (live) for this specific
   // order's account, not just "this order was provisioned once" — this is
   // the only accurate source for "is this exact plan still active right
@@ -725,7 +746,7 @@ function renderPlanCard(p, { banned, plan, order }) {
         sub: p.expire_at
           ? DASH_I18N.statusActiveUntil.replace('__DATE__', new Date(p.expire_at).toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'}))
           : DASH_I18N.statusActiveGeneric,
-        ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling, linkBtn,
+        ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling, ...removable, linkBtn,
       });
     }
     // limited (data ran out), disabled, or anything else Marzban reports
@@ -735,7 +756,7 @@ function renderPlanCard(p, { banned, plan, order }) {
         badge: DASH_I18N.badgeDeactivated, badgeClass: 'badge-danger',
         name: DASH_I18N.statusLimited.replace('__NAME__', planName),
         sub: DASH_I18N.statusLimitedSub,
-        ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling,
+        ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling, ...removable,
       });
     }
     if (p.marzban_status === 'disabled') {
@@ -743,14 +764,14 @@ function renderPlanCard(p, { banned, plan, order }) {
         badge: DASH_I18N.badgeDeactivated, badgeClass: 'badge-danger',
         name: DASH_I18N.statusDisabled.replace('__NAME__', planName),
         sub: DASH_I18N.statusDisabledSub,
-        ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling,
+        ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling, ...removable,
       });
     }
     return statusHeroCard({
       badge: DASH_I18N.badgeDeactivated, badgeClass: 'badge-danger',
       name: DASH_I18N.statusExpired.replace('__NAME__', planName),
       sub: DASH_I18N.statusExpiredSub,
-      ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling,
+      ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling, ...removable,
     });
   }
 
@@ -764,7 +785,7 @@ function renderPlanCard(p, { banned, plan, order }) {
     sub: estExpiry
       ? DASH_I18N.statusRenews.replace('__DATE__', estExpiry.toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'}))
       : DASH_I18N.statusActiveGeneric,
-    ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling,
+    ctaLabel: DASH_I18N.renewPlan, ctaHref: '/billing', ctaOnclick: goBilling, ...removable,
     linkBtn: p.subscription_url || null,
   });
 }
@@ -786,6 +807,40 @@ function renderEmptyStatusCard() {
   });
 }
 
+let removePlanOrderId = null;
+
+function openRemovePlanModal(btn) {
+  removePlanOrderId = btn.dataset.orderId;
+  document.getElementById('removePlanModalMsg').textContent = DASH_I18N.removePlanMsg.replace('__NAME__', btn.dataset.name);
+  document.getElementById('removePlanModal').style.display = 'flex';
+}
+
+function closeRemovePlanModal() {
+  removePlanOrderId = null;
+  document.getElementById('removePlanModal').style.display = 'none';
+}
+
+async function confirmRemovePlan() {
+  const orderId = removePlanOrderId;
+  if (!orderId) return;
+  const btn = document.getElementById('removePlanConfirmBtn');
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/api/orders/${orderId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      showToast((typeof data.detail === 'string' && data.detail) || DASH_I18N.removeFailed, 'error');
+      return;
+    }
+    closeRemovePlanModal();
+    showToast(DASH_I18N.planRemoved, 'success');
+    loadStatus();
+    loadRecentOrders();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function loadStatus() {
   const [meRes, ordersRes, plansRes, vpnRes] = await Promise.all([
     fetch('/api/auth/me'), fetch('/api/orders'), fetch('/api/plans'), fetch('/api/orders/vpn-status/me'),
@@ -799,8 +854,12 @@ async function loadStatus() {
 
   const freePlan = plans.find(p => p.price_usdt === 0);
   if (freePlan) {
-    const alreadyClaimed = orders.some(o => o.plan_id === freePlan.id);
-    if (!alreadyClaimed) {
+    // The free plan can be claimed again once the previous one has expired
+    // or run out of data — mirrors order_service.has_usable_free_plan.
+    // Unknown live status (Marzban unreachable) counts as still usable.
+    const hasUsableFree = orders.some(o => o.plan_id === freePlan.id && (o.status === 'pending' || o.status === 'paid')) ||
+      (vpn.plans || []).some(p => p.plan_id === freePlan.id && (p.unreachable || ['active', 'on_hold'].includes(p.marzban_status)));
+    if (!hasUsableFree) {
       document.getElementById('promoText').textContent = DASH_I18N.promoText;
       document.getElementById('promoCta').href = `/billing?plan=${freePlan.id}`;
       document.getElementById('promoNotice').style.display = 'flex';
@@ -875,6 +934,7 @@ const BILLING_I18N = {
     expired: {{ t('status_expired')|tojson }},
     failed: {{ t('status_failed')|tojson }},
     cancelled: {{ t('status_cancelled')|tojson }},
+    removed: {{ t('status_removed')|tojson }},
   },
   renewal: {{ t('order_renewal')|tojson }},
   newPurchase: {{ t('order_new_purchase')|tojson }},

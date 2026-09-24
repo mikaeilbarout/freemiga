@@ -82,7 +82,7 @@ TEXT = {
         "This page updates automatically, and we'll let you know here as soon as it's confirmed.",
         "pay_now": "Pay now →",
         "free_plan_claimed": "✅ Your free trial ({plan_name}) has been activated!",
-        "free_plan_already_used": "You've already used your free trial — please choose a paid plan to continue.",
+        "free_plan_already_used": "Your free plan is still active — you can claim it again once it expires or its data runs out.",
         "banned": "⚠️ Your account has been suspended.\nReason: {reason}\n"
         "Please contact support if you believe this is a mistake.",
         "pending_order_exists": "You already have a payment in progress. You're welcome to cancel it below to "
@@ -150,7 +150,7 @@ TEXT = {
         "این صفحه به‌صورت خودکار به‌روزرسانی میشه و به‌محض تأیید پرداخت، همینجا بهتون اطلاع می‌دیم.",
         "pay_now": "پرداخت →",
         "free_plan_claimed": "✅ پلن آزمایشی رایگان شما ({plan_name}) فعال شد!",
-        "free_plan_already_used": "شما قبلاً از پلن آزمایشی رایگان استفاده کرده‌اید — لطفاً برای ادامه یک پلن پولی انتخاب کنید.",
+        "free_plan_already_used": "پلن رایگان شما هنوز فعال است — بعد از تمام شدن زمان یا حجم آن، می‌توانید دوباره دریافتش کنید.",
         "banned": "⚠️ حساب شما مسدود شده است.\nدلیل: {reason}\n"
         "اگر فکر می‌کنید این یک اشتباهه، لطفاً با پشتیبانی تماس بگیرید.",
         "pending_order_exists": "شما یک سفارش نیمه‌کاره دارید. می‌تونید پایین لغوش کنید تا پلن یا روش پرداخت "
@@ -300,17 +300,18 @@ def _terms_kb(lang: str, plan_id: str) -> dict:
 
 
 async def _claim_free_plan(db, chat_id: str, lang: str, customer: Customer, plan: Plan) -> None:
-    """Mirrors routers/orders.py's free-plan branch: claimed once per
-    account ever, provisioned immediately instead of going through a
-    checkout — no payment method involved at all, so this must never fall
+    """Mirrors routers/orders.py's free-plan branch: can be claimed again
+    only once the previous free plan has expired or run out of data,
+    provisioned immediately instead of going through a checkout — no payment method involved at all, so this must never fall
     through to _show_payment_choice's payment-method flow (a $0 Stripe
     checkout or a crypto payment with nothing to actually verify)."""
-    already_claimed = (
-        db.query(Order)
-        .filter(Order.customer_id == customer.id, Order.plan_id == plan.id)
-        .first()
-    )
-    if already_claimed:
+    # _start_order's ban check never runs on this path (free plans skip
+    # the payment-method step entirely), so it has to be repeated here.
+    if customer.is_banned:
+        await telegram.send_message(chat_id, _t(lang, "banned", reason=customer.ban_reason or "—"))
+        return
+
+    if await order_service.has_usable_free_plan(db, customer, plan):
         await telegram.send_message(chat_id, _t(lang, "free_plan_already_used"))
         return
 

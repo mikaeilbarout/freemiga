@@ -75,28 +75,20 @@ async def create_order(
         is not None
     )
 
-    # Free trial plans skip payment entirely — claimed once per account,
-    # ever, provisioned immediately instead of going through a checkout
-    # session.
+    # Free trial plans skip payment entirely and are provisioned
+    # immediately instead of going through a checkout session. They can be
+    # claimed again, but only after the previous free plan has expired or
+    # run out of data (see order_service.has_usable_free_plan).
     if plan.price_usdt == 0:
         # Lock the customer row for the duration of the check-and-create so
         # a fast double-click / retry-before-response can't pass the
-        # "already claimed" check twice concurrently (both requests would
-        # see zero prior orders before either commits) and end up creating
-        # two separate free-plan orders. Released on the commit just below.
+        # "no usable free plan" check twice concurrently (both requests
+        # would see no prior order before either commits) and end up
+        # creating two separate free-plan orders. Released on the commit
+        # just below.
         db.query(Customer).filter(Customer.id == customer.id).with_for_update().first()
 
-        # Any prior attempt at all — not just paid/provisioned — counts as
-        # the one-time claim being used. Pending/cancelled/failed attempts
-        # still count: this is what the row lock above actually protects,
-        # since a concurrent request's order might not be paid yet the
-        # instant this check runs.
-        already_claimed = (
-            db.query(Order)
-            .filter(Order.customer_id == customer.id, Order.plan_id == plan.id)
-            .first()
-        )
-        if already_claimed:
+        if await order_service.has_usable_free_plan(db, customer, plan):
             raise HTTPException(409, i18n.t(lang, "err_free_plan_already_used"))
 
         order = Order(
@@ -260,6 +252,46 @@ def cancel_order(
         raise HTTPException(409, i18n.t(lang, "err_only_pending_cancellable"))
 
     order_service.cancel_pending_order(db, order)
+    return order
+
+
+@router.delete("/{order_id}", response_model=OrderOut)
+async def remove_order(
+    order_id: str,
+    customer: Customer = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+    lang: str = Depends(get_lang),
+):
+    """Lets a customer delete one of their own plans from the dashboard.
+    Its Marzban account is permanently removed (the VPN link stops working
+    right away); the order row itself is kept, marked as removed, so order
+    history and bookkeeping stay intact. No refund is involved."""
+    if customer.is_banned:
+        # A suspended customer's accounts are the admin's to manage — see
+        # routers/admin.py's ban/unban, which works on provisioned orders.
+        reason = customer.ban_reason or i18n.t(lang, "err_account_suspended_generic")
+        raise HTTPException(403, i18n.t(lang, "err_account_suspended", reason=reason))
+
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id, Order.customer_id == customer.id)
+        .first()
+    )
+    if not order:
+        raise HTTPException(404, i18n.t(lang, "err_order_not_found"))
+    if order.status != OrderStatus.provisioned:
+        raise HTTPException(409, i18n.t(lang, "err_only_active_removable"))
+
+    # Delete in Marzban first: if that fails, the order must stay
+    # provisioned, or the dashboard would hide a VPN account that still works.
+    try:
+        await marzban.delete_vpn_user(order.marzban_username)
+    except httpx.HTTPError:
+        raise HTTPException(502, i18n.t(lang, "err_remove_failed"))
+
+    order.status = OrderStatus.removed
+    db.commit()
+    db.refresh(order)
     return order
 
 
