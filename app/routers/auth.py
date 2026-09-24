@@ -1,5 +1,4 @@
 import logging
-import random
 import secrets
 from datetime import datetime, timedelta
 
@@ -8,11 +7,13 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app import i18n
-from app.auth import get_current_customer, hash_password, verify_password
+from app.auth import get_current_customer, hash_password, start_session, verify_password
 from app.database import get_db
 from app.lang import get_lang
 from app.limiter import limiter
-from app.models import Customer, CustomerAlert, EmailVerificationToken, Order, OrderStatus, PasswordResetCode
+from app.models import (
+    Customer, CustomerAlert, EmailVerificationToken, Order, OrderStatus, PasswordResetCode, TelegramLinkToken,
+)
 from app.schemas import (
     ChangePasswordIn,
     CustomerAlertOut,
@@ -29,6 +30,14 @@ from app.services import email_gateway, marzban, telegram, telegram_bot, verific
 logger = logging.getLogger("auth")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# Password-reset brute-force limits, on top of the per-IP rate limit (which
+# an attacker with many IPs gets around): each code dies after
+# MAX_RESET_ATTEMPTS wrong guesses, and an account stops accepting codes
+# after MAX_RESET_FAILURES_PER_HOUR wrong guesses across all its codes.
+MAX_RESET_ATTEMPTS = 5
+MAX_RESET_FAILURES_PER_HOUR = 10
+TELEGRAM_LINK_TTL = timedelta(minutes=15)
 
 
 @router.post("/signup", response_model=CustomerOut)
@@ -51,7 +60,7 @@ async def signup(payload: SignupIn, request: Request, db: Session = Depends(get_
 
     await verification.send_verification_email(db, customer)
 
-    request.session["customer_id"] = customer.id
+    start_session(request, customer)
     return customer
 
 
@@ -106,7 +115,7 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db), lan
     if not customer or customer.is_deleted or not verify_password(payload.password, customer.password_hash):
         raise HTTPException(401, i18n.t(lang, "err_invalid_credentials"))
 
-    request.session["customer_id"] = customer.id
+    start_session(request, customer)
     return customer
 
 
@@ -222,15 +231,42 @@ def change_password(
     if not verify_password(payload.current_password, customer.password_hash):
         raise HTTPException(401, i18n.t(lang, "err_current_password_incorrect"))
     customer.password_hash = hash_password(payload.new_password)
+    # Signs out every other device; this one stays logged in.
+    customer.auth_version = (customer.auth_version or 0) + 1
     db.commit()
+    start_session(request, customer)
     return {"ok": True}
 
 
 @router.get("/telegram-link")
-def telegram_link(customer: Customer = Depends(get_current_customer)):
+def telegram_link(customer: Customer = Depends(get_current_customer), db: Session = Depends(get_db)):
+    """The link carries a one-time token that expires after
+    TELEGRAM_LINK_TTL — never the permanent customer id, since whoever
+    opens it gets this account's password-reset codes on Telegram. An
+    unused, still-fresh token is reused so page loads don't pile them up."""
+    if not telegram.deep_link("x"):
+        return {"linked": bool(customer.telegram_chat_id), "link": ""}
+    now = datetime.utcnow()
+    link = (
+        db.query(TelegramLinkToken)
+        .filter(
+            TelegramLinkToken.customer_id == customer.id,
+            TelegramLinkToken.used.is_(False),
+            TelegramLinkToken.expires_at > now + timedelta(minutes=5),
+        )
+        .first()
+    )
+    if not link:
+        link = TelegramLinkToken(
+            customer_id=customer.id,
+            token=secrets.token_urlsafe(24),
+            expires_at=now + TELEGRAM_LINK_TTL,
+        )
+        db.add(link)
+        db.commit()
     return {
         "linked": bool(customer.telegram_chat_id),
-        "link": telegram.deep_link(customer.id),
+        "link": telegram.deep_link(link.token),
     }
 
 
@@ -254,7 +290,12 @@ async def request_reset(payload: RequestResetIn, request: Request, db: Session =
     if not customer or not (customer.email or customer.telegram_chat_id):
         return generic_response
 
-    code = f"{random.randint(0, 999999):06d}"
+    # Only the newest code is ever valid — each extra request would
+    # otherwise add another live code and multiply a guesser's odds.
+    db.query(PasswordResetCode).filter(
+        PasswordResetCode.customer_id == customer.id, PasswordResetCode.used.is_(False)
+    ).update({PasswordResetCode.used: True})
+    code = f"{secrets.randbelow(1_000_000):06d}"
     reset = PasswordResetCode(
         customer_id=customer.id,
         code_hash=hash_password(code),
@@ -287,7 +328,17 @@ def reset_password(payload: ResetIn, request: Request, db: Session = Depends(get
         raise HTTPException(400, i18n.t(lang, "err_invalid_code"))
 
     now = datetime.utcnow()
-    candidates = (
+    recent_failures = sum(
+        c.attempts or 0
+        for c in db.query(PasswordResetCode).filter(
+            PasswordResetCode.customer_id == customer.id,
+            PasswordResetCode.created_at > now - timedelta(hours=1),
+        )
+    )
+    if recent_failures >= MAX_RESET_FAILURES_PER_HOUR:
+        raise HTTPException(429, i18n.t(lang, "err_too_many_reset_attempts"))
+
+    code = (
         db.query(PasswordResetCode)
         .filter(
             PasswordResetCode.customer_id == customer.id,
@@ -295,16 +346,23 @@ def reset_password(payload: ResetIn, request: Request, db: Session = Depends(get
             PasswordResetCode.expires_at > now,
         )
         .order_by(PasswordResetCode.created_at.desc())
-        .all()
+        .first()
     )
-
-    matched = next((c for c in candidates if verify_password(payload.code, c.code_hash)), None)
-    if not matched:
+    if not code:
+        raise HTTPException(400, i18n.t(lang, "err_invalid_or_expired_code"))
+    if not verify_password(payload.code, code.code_hash):
+        code.attempts = (code.attempts or 0) + 1
+        if code.attempts >= MAX_RESET_ATTEMPTS:
+            code.used = True
+        db.commit()
         raise HTTPException(400, i18n.t(lang, "err_invalid_or_expired_code"))
 
-    matched.used = True
+    code.used = True
     customer.password_hash = hash_password(payload.new_password)
+    # A reset usually means the password may be known to someone else —
+    # sign out every existing session.
+    customer.auth_version = (customer.auth_version or 0) + 1
     db.commit()
 
-    request.session["customer_id"] = customer.id
+    start_session(request, customer)
     return customer

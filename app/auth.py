@@ -27,12 +27,32 @@ def verify_password(password: str, stored: str) -> bool:
     return hmac.compare_digest(dk.hex(), hash_hex)
 
 
-def get_current_customer(request: Request, db: Session = Depends(get_db)) -> Customer:
+def start_session(request: Request, customer: Customer) -> None:
+    """Logs this browser in as customer. The stored auth_version lets a
+    password change/reset sign out every other session (see
+    session_customer)."""
+    request.session["customer_id"] = customer.id
+    request.session["auth_version"] = customer.auth_version or 0
+
+
+def session_customer(request: Request, db: Session) -> Customer | None:
+    """The logged-in customer, or None — also None for a session issued
+    before the account's last password change/reset. Sessions from before
+    auth_version existed carry no version and count as 0."""
     customer_id = request.session.get("customer_id")
     if not customer_id:
-        raise HTTPException(401, "Not logged in")
+        return None
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer or customer.is_deleted:
+        return None
+    if request.session.get("auth_version", 0) != (customer.auth_version or 0):
+        return None
+    return customer
+
+
+def get_current_customer(request: Request, db: Session = Depends(get_db)) -> Customer:
+    customer = session_customer(request, db)
+    if not customer:
         raise HTTPException(401, "Not logged in")
     return customer
 

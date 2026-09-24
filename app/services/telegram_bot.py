@@ -21,7 +21,9 @@ from sqlalchemy.exc import IntegrityError
 
 from app.auth import hash_password
 from app.config import settings
-from app.models import Customer, Order, OrderStatus, PaymentMethod, Plan, SupportTicket, TicketMessage
+from app.models import (
+    Customer, Order, OrderStatus, PaymentMethod, Plan, SupportTicket, TelegramLinkToken, TicketMessage,
+)
 from app.services import order_service, polygon_gateway, stripe_gateway, telegram, tron_gateway, verification
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -422,6 +424,7 @@ async def _start_order(db, chat_id: str, lang: str, customer: Customer, plan_id:
         await telegram.send_message(chat_id, _t(lang, "terms_not_accepted"))
         return
 
+    order_service.expire_stale_pending(db, customer.id)
     pending = (
         db.query(Order)
         .filter(Order.customer_id == customer.id, Order.status == OrderStatus.pending)
@@ -449,7 +452,8 @@ async def _start_order(db, chat_id: str, lang: str, customer: Customer, plan_id:
         plan_id=plan.id,
         is_renewal=already_has_account,
         payment_method=PaymentMethod(method),
-        amount_due=plan.price_usdt,
+        # Same unique-amount rule as the web checkout (routers/orders.py).
+        amount_due=order_service.unique_crypto_amount(db, plan) if method == "crypto" else plan.price_usdt,
         status=OrderStatus.pending,
         expires_at=datetime.utcnow() + timedelta(minutes=settings.ORDER_EXPIRY_MINUTES),
     )
@@ -479,7 +483,7 @@ async def _start_order(db, chat_id: str, lang: str, customer: Customer, plan_id:
 
     await telegram.send_message(
         chat_id,
-        _t(lang, "checkout_ready", price=plan.price_usdt, plan_name=plan.name),
+        _t(lang, "checkout_ready", price=order.amount_due, plan_name=plan.name),
         reply_markup=_kb([[{"text": _t(lang, "pay_now"), "url": pay_url}]]),
     )
 
@@ -522,9 +526,18 @@ async def _handle_start(db, chat_id: str, text: str, customer: Customer | None) 
     if len(parts) >= 2:
         # Deep link from the website's "Connect Telegram bot" button — link an
         # EXISTING web account to this chat (doesn't create a new one).
-        target_id = parts[1].strip()
-        target = db.query(Customer).filter(Customer.id == target_id).first()
-        if target:
+        link = (
+            db.query(TelegramLinkToken)
+            .filter(
+                TelegramLinkToken.token == parts[1].strip(),
+                TelegramLinkToken.used.is_(False),
+                TelegramLinkToken.expires_at > datetime.utcnow(),
+            )
+            .first()
+        )
+        target = db.query(Customer).filter(Customer.id == link.customer_id).first() if link else None
+        if target and not target.is_deleted:
+            link.used = True
             previous_chat_id = target.telegram_chat_id
             target.telegram_chat_id = chat_id
             try:
@@ -823,7 +836,14 @@ async def _handle_successful_payment(db, message: dict) -> None:
     if not order_id or not charge_id:
         return
 
-    order = db.query(Order).filter(Order.id == order_id, Order.status == OrderStatus.pending).first()
+    # Telegram has already taken the Stars at this point, so the order is
+    # credited even if it expired or was cancelled since the invoice was
+    # sent — see payments._mark_paid_and_provision.
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id, Order.status.in_(order_service.PAYABLE_STATUSES))
+        .first()
+    )
     if not order:
         return
 
@@ -835,7 +855,7 @@ async def _handle_successful_payment(db, message: dict) -> None:
         return
 
     from app.routers.payments import _mark_paid_and_provision
-    await _mark_paid_and_provision(order.id)
+    await _mark_paid_and_provision(order.id, payment_received=True)
 
 
 # ---------- Entry point ----------

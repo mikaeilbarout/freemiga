@@ -13,6 +13,10 @@ SUPPORTED_LANGUAGES = ("en", "fa")
 
 
 def client_ip(request: Request) -> str:
+    if settings.TRUST_CLOUDFLARE_IP:
+        cf_ip = request.headers.get("cf-connecting-ip")
+        if cf_ip:
+            return cf_ip.strip()
     real_ip = request.headers.get("x-real-ip")
     if real_ip:
         return real_ip.strip()

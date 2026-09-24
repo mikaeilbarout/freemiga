@@ -65,6 +65,13 @@ class Settings:
     # Set to "true" once running behind Cloudflare/Nginx HTTPS (production).
     # Keep "false" only for local http://127.0.0.1 testing.
     SESSION_COOKIE_SECURE: bool = os.getenv("SESSION_COOKIE_SECURE", "true").lower() == "true"
+    # Set to "true" ONLY if the site is reached through Cloudflare's proxy
+    # (orange cloud) and the origin accepts no traffic except from
+    # Cloudflare. Then the visitor's real IP comes from the
+    # CF-Connecting-IP header (for rate limits and GeoIP) — otherwise every
+    # visitor looks like a Cloudflare server. If the origin is reachable
+    # directly, anyone could fake this header, so leave it "false" then.
+    TRUST_CLOUDFLARE_IP: bool = os.getenv("TRUST_CLOUDFLARE_IP", "false").lower() == "true"
     # Login for THIS site's admin panel — deliberately separate from the
     # Marzban admin account so leaking one doesn't expose the other.
     ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin")

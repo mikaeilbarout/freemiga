@@ -122,10 +122,13 @@ async def answer_pre_checkout_query(pre_checkout_query_id: str, ok: bool, error_
             logger.warning("Telegram answerPreCheckoutQuery failed: %s", resp.text)
 
 
-def deep_link(customer_id: str) -> str:
+def deep_link(token: str) -> str:
+    """token is a one-time TelegramLinkToken (see routers/auth.py), never
+    the customer id — this link hands over the account's Telegram channel,
+    including password-reset codes."""
     if not settings.TELEGRAM_BOT_USERNAME:
         return ""
-    return f"https://t.me/{settings.TELEGRAM_BOT_USERNAME}?start={customer_id}"
+    return f"https://t.me/{settings.TELEGRAM_BOT_USERNAME}?start={token}"
 
 
 async def notify_admin(text: str) -> None:

@@ -709,7 +709,9 @@ function statusHeroCard({ badge, badgeClass, name, sub, ctaLabel, ctaHref, ctaOn
 // expiring or running out of data must never affect how any of the
 // customer's other cards render.
 function renderPlanCard(p, { banned, plan, order }) {
-  const planName = plan ? plan.name : DASH_I18N.statusActivePlan;
+  // Escaped: it's interpolated into HTML and into the Delete button's
+  // data-name attribute below.
+  const planName = escapeHtml(plan ? plan.name : DASH_I18N.statusActivePlan);
   const goBilling = statusHeroCta();
 
   // A marzban-guard or admin suspension takes priority over everything

@@ -14,6 +14,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import i18n
+from app.auth import session_customer
 from app.config import settings
 from app.database import Base, engine, SessionLocal
 from app.lang import LANG_COOKIE, SUPPORTED_LANGUAGES, resolve_lang
@@ -55,10 +56,20 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         status_code=500,
     )
 
-if not settings.SESSION_SECRET:
+# The fallback and the .env.example placeholder are both public (the repo is
+# public) — signing sessions with either lets anyone forge any session,
+# including an admin one. Refuse to start in production (Secure cookies on)
+# without a real secret; only a local http:// dev setup may fall back.
+_PUBLIC_SESSION_SECRETS = {"", "change_me_to_a_random_64_char_hex_string"}
+if settings.SESSION_SECRET in _PUBLIC_SESSION_SECRETS:
+    if settings.SESSION_COOKIE_SECURE:
+        raise RuntimeError(
+            "SESSION_SECRET is not set to a real random value in .env — refusing to start. "
+            "Generate one with: python3 -c \"import secrets; print(secrets.token_hex(32))\""
+        )
     logging.warning(
         "SESSION_SECRET is not set in .env — using an insecure default. "
-        "Set a real random value before going to production."
+        "Only acceptable for local testing (SESSION_COOKIE_SECURE=false)."
     )
 if settings.STRIPE_SECRET_KEY and not settings.STRIPE_WEBHOOK_SECRET:
     logging.warning(
@@ -199,12 +210,11 @@ def render(request: Request, template_name: str, *, force_lang: str = None, stat
     # ~0.11 CLS regression (an empty #navAuthSlot snapping to its real
     # size once /api/auth/me resolved).
     nav_user = None
-    customer_id = request.session.get("customer_id")
-    if customer_id:
+    if request.session.get("customer_id"):
         nav_db = SessionLocal()
         try:
-            customer = nav_db.query(Customer).filter(Customer.id == customer_id).first()
-            if customer and not customer.is_deleted:
+            customer = session_customer(request, nav_db)
+            if customer:
                 nav_user = customer.username
         finally:
             nav_db.close()
@@ -443,7 +453,9 @@ def sitemap_xml():
 @app.get("/set-language")
 def set_language(request: Request, lang: str, next: str = "/"):
     lang = lang if lang in SUPPORTED_LANGUAGES else settings.DEFAULT_LANGUAGE
-    safe_next = next if next.startswith("/") and not next.startswith("//") else "/"
+    # Browsers treat "\" like "/", so "/\evil.com" would leave the site
+    # just like "//evil.com" does.
+    safe_next = next if next.startswith("/") and not next.startswith("//") and "\\" not in next else "/"
     response = RedirectResponse(url=safe_next, status_code=303)
     response.set_cookie(LANG_COOKIE, lang, max_age=60 * 60 * 24 * 365, samesite="lax")
     return response

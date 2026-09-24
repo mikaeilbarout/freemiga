@@ -30,5 +30,11 @@ def seed_plans() -> None:
 
 if __name__ == "__main__":
     Base.metadata.create_all(bind=engine)
+    # Column/enum additions create_all can't make on an existing database.
+    # Both are idempotent, so running them on every container start means a
+    # deploy never serves new code against an unmigrated schema.
+    from scripts import add_order_removed_status, add_security_hardening
+    add_order_removed_status.migrate()
+    add_security_hardening.migrate()
     seed_plans()
     print("Database schema ready.")

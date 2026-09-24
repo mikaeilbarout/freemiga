@@ -331,6 +331,23 @@ PERSIAN_COUNTRIES=IR,AF
   it's renewed instead of erroring out
 - **Admin action log**: every ban/unban/manual confirmation/ticket reply is
   logged in the admin panel's "Action Log" tab
+- **Crypto payments are tied to one order**: each crypto order gets its own
+  exact amount (e.g. 5.037 USDT instead of 5), and a transaction is only
+  accepted if it pays exactly that amount and was made after the order was
+  created — so nobody can claim someone else's payment to the public wallet.
+  A payment for a different amount is rejected; confirm it by hand from the
+  admin panel after checking it.
+- **Late payments aren't lost**: a card/crypto/Stars payment that arrives
+  after its order expired or was cancelled is still credited (you get a
+  Telegram notice). A payment from a suspended or deleted account is held
+  as "paid" without provisioning, for you to refund or confirm manually.
+- **Database migrations run automatically** on every container start
+  (`scripts/init_db.py`) — no manual step after `./deploy.sh`.
+- **Cloudflare**: if the domain goes through Cloudflare's proxy and the
+  server accepts traffic only from Cloudflare, set `TRUST_CLOUDFLARE_IP=true`
+  in `.env` so rate limits and Persian auto-detection see visitors' real IPs.
+- **`SESSION_SECRET` is required**: with `SESSION_COOKIE_SECURE=true` the app
+  refuses to start without a real random value.
 
 ## Important security notes
 

@@ -194,7 +194,9 @@ function updateCryptoBox(order) {
   const box = document.getElementById('cryptoPaymentBox');
   const network = order.crypto_network || 'tron';
   const address = cryptoNetworks[network];
-  const show = order.payment_method === 'crypto' && order.status === 'pending' && !!address;
+  // An expired order can still be paid (the server accepts late payments
+  // for it) — only the payment deadline passed.
+  const show = order.payment_method === 'crypto' && (order.status === 'pending' || order.status === 'expired') && !!address;
   box.style.display = show ? 'block' : 'none';
   if (show) {
     document.getElementById('walletAddress').textContent = address;

@@ -15,6 +15,7 @@ Standard EVM addresses/hashes throughout (no address-format conversion
 needed, unlike Tron).
 """
 import logging
+from datetime import datetime
 
 import httpx
 
@@ -46,7 +47,9 @@ def _find_matching_log(logs: list[dict], usdt_contract: str, our_wallet: str, ex
     transaction) — the real payment to our wallet isn't always the first
     matching log, so every candidate is checked instead of just the first
     one found. Raises the most specific error code found across all
-    candidates if none of them actually pay us enough."""
+    candidates if none of them pays us exactly this order's amount (exact,
+    for the same reason as tron_gateway._find_matching_transfer)."""
+    expected_units = round(expected_amount * 10 ** USDT_DECIMALS)
     best_code = "not_found"
     for log in logs:
         if log.get("address", "").lower() != usdt_contract:
@@ -62,18 +65,32 @@ def _find_matching_log(logs: list[dict], usdt_contract: str, our_wallet: str, ex
         if recipient.lower() != our_wallet:
             continue
         try:
-            amount = int(log["data"], 16) / (10 ** USDT_DECIMALS)
+            units = int(log["data"], 16)
         except (KeyError, ValueError, TypeError):
             continue
-        if amount < expected_amount:
+        if units < expected_units:
             best_code = "amount_too_low"
+            continue
+        if units != expected_units:
+            best_code = "amount_mismatch"
             continue
         return log
     raise PolygonVerificationError(best_code)
 
 
-def verify_transaction(tx_hash: str, expected_amount: float) -> None:
-    """Raises PolygonVerificationError on any failure. Returns None on success."""
+def _get(client: httpx.Client, params: dict) -> dict:
+    resp = client.get(
+        settings.POLYGONSCAN_API_BASE,
+        params={"chainid": settings.POLYGON_CHAIN_ID, "module": "proxy",
+                "apikey": settings.POLYGONSCAN_API_KEY, **params},
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def verify_transaction(tx_hash: str, expected_amount: float) -> datetime:
+    """Raises PolygonVerificationError on any failure. On success, returns
+    when the transaction was included in a block (UTC)."""
     tx_hash = (tx_hash or "").strip().lower()
     if not tx_hash.startswith("0x"):
         tx_hash = "0x" + tx_hash
@@ -83,18 +100,7 @@ def verify_transaction(tx_hash: str, expected_amount: float) -> None:
 
     with httpx.Client(timeout=15) as client:
         try:
-            resp = client.get(
-                settings.POLYGONSCAN_API_BASE,
-                params={
-                    "chainid": settings.POLYGON_CHAIN_ID,
-                    "module": "proxy",
-                    "action": "eth_getTransactionReceipt",
-                    "txhash": tx_hash,
-                    "apikey": settings.POLYGONSCAN_API_KEY,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
+            data = _get(client, {"action": "eth_getTransactionReceipt", "txhash": tx_hash})
         except httpx.HTTPError:
             logger.exception("PolygonScan receipt lookup failed for %s", tx_hash)
             raise PolygonVerificationError("network_error")
@@ -112,3 +118,14 @@ def verify_transaction(tx_hash: str, expected_amount: float) -> None:
     our_wallet = settings.POLYGON_USDT_WALLET_ADDRESS.lower()
 
     _find_matching_log(result.get("logs", []), usdt_contract, our_wallet, expected_amount)
+
+    # The receipt has no timestamp — it lives on the block.
+    with httpx.Client(timeout=15) as client:
+        try:
+            block = _get(client, {
+                "action": "eth_getBlockByNumber", "tag": result.get("blockNumber"), "boolean": "false",
+            }).get("result") or {}
+            return datetime.utcfromtimestamp(int(block["timestamp"], 16))
+        except (httpx.HTTPError, KeyError, ValueError, TypeError):
+            logger.exception("PolygonScan block lookup failed for %s", tx_hash)
+            raise PolygonVerificationError("network_error")

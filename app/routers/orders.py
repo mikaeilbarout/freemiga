@@ -18,6 +18,10 @@ from app.services import marzban, order_service, polygon_gateway, stripe_gateway
 
 CRYPTO_GATEWAYS = {"tron": tron_gateway, "polygon": polygon_gateway}
 
+# Allowance for clock differences between our server and the chain when
+# checking that a transaction wasn't made before its order existed.
+TX_CLOCK_SKEW = timedelta(minutes=2)
+
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
 
@@ -50,6 +54,7 @@ async def create_order(
     # "cancel & choose again" flow (services/telegram_bot.py) — same
     # situation, same resolution, just adapted to a web request/response
     # instead of a chat prompt.
+    order_service.expire_stale_pending(db, customer.id)
     pending = (
         db.query(Order)
         .filter(Order.customer_id == customer.id, Order.status == OrderStatus.pending)
@@ -135,7 +140,10 @@ async def create_order(
         is_renewal=already_has_account,  # server decides this, not the client
         payment_method=method,
         crypto_network=crypto_network,
-        amount_due=plan.price_usdt,  # fixed price — the gateway tells us which order was paid, not amount matching
+        # Crypto: the plan price plus a unique per-order offset, which is
+        # what ties an on-chain payment to this order (see
+        # order_service.unique_crypto_amount). Card: the plain price.
+        amount_due=order_service.unique_crypto_amount(db, plan) if method == PaymentMethod.crypto else plan.price_usdt,
         status=OrderStatus.pending,
         expires_at=datetime.utcnow() + timedelta(minutes=settings.ORDER_EXPIRY_MINUTES),
     )
@@ -172,7 +180,10 @@ async def verify_payment(
     )
     if not order:
         raise HTTPException(404, i18n.t(lang, "err_order_not_found"))
-    if order.status != OrderStatus.pending:
+    # Expired/cancelled orders are still accepted: a late payment is real
+    # money, and the checks below (exact unique amount, made after the
+    # order was created) already tie the transaction to this order.
+    if order.status not in order_service.PAYABLE_STATUSES:
         raise HTTPException(409, i18n.t(lang, "err_order_no_longer_pending"))
     if order.payment_method != PaymentMethod.crypto:
         raise HTTPException(400, i18n.t(lang, "err_invalid_payment_method"))
@@ -182,9 +193,15 @@ async def verify_payment(
         raise HTTPException(400, i18n.t(lang, "err_invalid_payment_method"))
 
     try:
-        await run_in_threadpool(gateway.verify_transaction, payload.tx_hash, order.amount_due)
+        tx_time = await run_in_threadpool(gateway.verify_transaction, payload.tx_hash, order.amount_due)
     except (tron_gateway.TronVerificationError, polygon_gateway.PolygonVerificationError) as e:
-        raise HTTPException(400, i18n.t(lang, f"err_crypto_{e.code}"))
+        raise HTTPException(400, i18n.t(lang, f"err_crypto_{e.code}", amount=order.amount_due))
+
+    # Our wallet address is public, so anyone can look up every payment it
+    # has ever received. A transaction from before this order existed was
+    # made for something else and can't pay for it.
+    if tx_time < order.created_at - TX_CLOCK_SKEW:
+        raise HTTPException(400, i18n.t(lang, "err_crypto_tx_too_old"))
 
     # Set tx_hash in its own commit first — the column's unique constraint
     # is what actually prevents the same transaction being credited twice
@@ -198,7 +215,7 @@ async def verify_payment(
         raise HTTPException(409, i18n.t(lang, "err_tx_hash_already_used"))
 
     from app.routers.payments import _mark_paid_and_provision
-    await _mark_paid_and_provision(order.id)
+    await _mark_paid_and_provision(order.id, payment_received=True)
     db.refresh(order)
     return OrderOut.model_validate(order)
 
@@ -302,6 +319,7 @@ def get_order(
     db: Session = Depends(get_db),
     lang: str = Depends(get_lang),
 ):
+    order_service.expire_stale_pending(db, customer.id)
     order = (
         db.query(Order)
         .filter(Order.id == order_id, Order.customer_id == customer.id)
@@ -323,6 +341,7 @@ def my_orders(
     # handling, or from the "cancel" link on a pending order they
     # abandoned) and they carry no useful information for the customer,
     # just noise in their order history.
+    order_service.expire_stale_pending(db, customer.id)
     return (
         db.query(Order)
         .filter(Order.customer_id == customer.id, Order.status != OrderStatus.cancelled)

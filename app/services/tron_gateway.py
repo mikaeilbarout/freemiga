@@ -15,6 +15,7 @@ disambiguate concurrent payments to a shared address.
 """
 import hashlib
 import logging
+from datetime import datetime
 
 import httpx
 
@@ -68,19 +69,28 @@ def _find_matching_transfer(transfers: list[dict], expected_amount: float) -> di
     transaction) — the real payment to our wallet isn't always the first
     one, so every candidate is checked instead of just transfers[0]. Raises
     the most specific error code found across all candidates if none of
-    them actually pay us enough."""
+    them pays us exactly this order's amount.
+
+    Exact, not "at least": each crypto order has its own unique amount (see
+    order_service.unique_crypto_amount), which is what ties a payment to
+    one specific order — accepting any larger amount would let a payment
+    meant for a pricier order be claimed for a cheaper one."""
     best_code = "wrong_recipient"
+    expected_units = round(expected_amount * 10 ** USDT_DECIMALS)
     for transfer in transfers:
         result = transfer.get("result", {})
         try:
             recipient = _hex_to_base58(result["to"])
-            amount = int(result["value"]) / (10 ** USDT_DECIMALS)
+            units = int(result["value"])
         except (KeyError, ValueError):
             continue
         if recipient != settings.TRON_USDT_WALLET_ADDRESS:
             continue
-        if amount < expected_amount:
+        if units < expected_units:
             best_code = "amount_too_low"
+            continue
+        if units != expected_units:
+            best_code = "amount_mismatch"
             continue
         if transfer.get("_unconfirmed"):
             best_code = "unconfirmed"
@@ -89,8 +99,9 @@ def _find_matching_transfer(transfers: list[dict], expected_amount: float) -> di
     raise TronVerificationError(best_code)
 
 
-def verify_transaction(tx_hash: str, expected_amount: float) -> None:
-    """Raises TronVerificationError on any failure. Returns None on success."""
+def verify_transaction(tx_hash: str, expected_amount: float) -> datetime:
+    """Raises TronVerificationError on any failure. On success, returns when
+    the transaction was included in a block (UTC)."""
     tx_hash = (tx_hash or "").strip().lower().removeprefix("0x")
     if not tx_hash or len(tx_hash) != 64 or any(c not in "0123456789abcdef" for c in tx_hash):
         raise TronVerificationError("invalid_hash")
@@ -113,7 +124,11 @@ def verify_transaction(tx_hash: str, expected_amount: float) -> None:
     if not transfers:
         raise TronVerificationError("not_found")
 
-    _find_matching_transfer(transfers, expected_amount)
+    match = _find_matching_transfer(transfers, expected_amount)
+    try:
+        tx_time = datetime.utcfromtimestamp(int(match["block_timestamp"]) / 1000)
+    except (KeyError, ValueError, TypeError):
+        raise TronVerificationError("network_error")
 
     with httpx.Client(timeout=15, headers=_headers()) as client:
         try:
@@ -129,3 +144,4 @@ def verify_transaction(tx_hash: str, expected_amount: float) -> None:
 
     if not info or info.get("receipt", {}).get("result") != "SUCCESS":
         raise TronVerificationError("failed")
+    return tx_time

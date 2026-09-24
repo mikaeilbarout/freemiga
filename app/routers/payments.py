@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 import stripe
@@ -7,7 +8,8 @@ from app.background import _provision
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Order, OrderStatus
-from app.services import nowpayments_gateway, polygon_gateway, stripe_gateway, tron_gateway
+from app.services import nowpayments_gateway, polygon_gateway, stripe_gateway, telegram, tron_gateway
+from app.services.order_service import PAYABLE_STATUSES
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
@@ -28,23 +30,57 @@ def payment_methods():
     }
 
 
-async def _mark_paid_and_provision(order_id: str) -> None:
+async def _mark_paid_and_provision(order_id: str, payment_received: bool = False) -> None:
+    """payment_received=True means real money was confirmed (card, crypto,
+    Stars). Such a payment is credited even if the order already expired or
+    was cancelled — e.g. the customer switched plans on the site but still
+    paid in the old Stripe tab. Before, that payment was silently dropped:
+    money taken, no plan, nobody told. Free claims and admin grants pass
+    False and only ever act on a pending order."""
     db = SessionLocal()
     try:
         # with_for_update() row-locks the order until commit, so a second
         # concurrent webhook delivery (Stripe/NowPayments both retry) for
-        # the same order blocks here instead of racing the pending check
+        # the same order blocks here instead of racing the status check
         # below and double-provisioning the VPN account.
         order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
-        if order and order.status == OrderStatus.pending:
-            order.status = OrderStatus.paid
-            order.paid_at = datetime.utcnow()
-            db.commit()
-            await _provision(order, db)
-        else:
+        allowed = PAYABLE_STATUSES if payment_received else (OrderStatus.pending,)
+        if not order or order.status not in allowed:
             db.rollback()
+            return
+
+        previous_status = order.status
+        customer = order.customer
+        order.status = OrderStatus.paid
+        order.paid_at = datetime.utcnow()
+        db.commit()
+
+        if customer.is_banned or customer.is_deleted:
+            # Provisioning would hand an active VPN account to a suspended
+            # (or deleted) account. Keep it paid and let the admin decide:
+            # refund, or confirm it by hand from the admin panel.
+            await _notify_admin_safely(
+                f"⚠️ Payment received for order {order.id}, but the customer "
+                f"({customer.username}) is {'deleted' if customer.is_deleted else 'suspended'} — "
+                "NOT provisioned. Refund it or confirm it manually from the admin panel."
+            )
+            return
+        if previous_status != OrderStatus.pending:
+            await _notify_admin_safely(
+                f"ℹ️ Payment arrived for order {order.id} ({customer.username}) after it was "
+                f"{previous_status.value} — provisioned anyway."
+            )
+
+        await _provision(order, db)
     finally:
         db.close()
+
+
+async def _notify_admin_safely(text: str) -> None:
+    try:
+        await telegram.notify_admin(text)
+    except Exception:
+        logging.getLogger("payments").exception("Failed to send admin notice")
 
 
 @router.post("/stripe/webhook")
@@ -61,11 +97,14 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None, 
     except (ValueError, stripe.SignatureVerificationError):
         raise HTTPException(400, "Invalid webhook signature")
 
-    if event["type"] == "checkout.session.completed":
+    if event["type"] in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
         session = event["data"]["object"]
         order_id = session.get("client_reference_id") or (session.get("metadata") or {}).get("order_id")
-        if order_id:
-            await _mark_paid_and_provision(order_id)
+        # "completed" only means the customer finished the checkout form —
+        # for delayed payment methods the money may not have arrived yet
+        # (it's then confirmed later by async_payment_succeeded).
+        if order_id and session.get("payment_status") == "paid":
+            await _mark_paid_and_provision(order_id, payment_received=True)
 
     return {"ok": True}
 
@@ -93,6 +132,6 @@ async def nowpayments_webhook(
     order_id = payload.get("order_id")
     status = payload.get("payment_status")
     if order_id and status == "finished":
-        await _mark_paid_and_provision(order_id)
+        await _mark_paid_and_provision(order_id, payment_received=True)
 
     return {"ok": True}

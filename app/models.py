@@ -45,6 +45,10 @@ class Customer(Base):
     # Soft-delete: PII is scrubbed and the Marzban VPN account is removed,
     # but the row (and its historical orders) stays for bookkeeping.
     is_deleted = Column(Boolean, default=False)
+    # Bumped on every password change/reset. Each login session stores the
+    # value it was issued with (app/auth.py), so bumping it signs out every
+    # other session at once.
+    auth_version = Column(Integer, default=0, nullable=False, server_default="0")
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -59,6 +63,24 @@ class PasswordResetCode(Base):
     id = Column(String, primary_key=True, default=gen_id)
     customer_id = Column(String, ForeignKey("customers.id"), nullable=False)
     code_hash = Column(String, nullable=False)
+    # Wrong guesses against this code — it's burned after
+    # MAX_RESET_ATTEMPTS (see routers/auth.py's reset_password).
+    attempts = Column(Integer, default=0, nullable=False, server_default="0")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, default=False)
+
+
+class TelegramLinkToken(Base):
+    """One-time, short-lived token behind the website's "Connect Telegram"
+    deep link. Replaces putting the permanent customer id in that link:
+    whoever opens it gets this account's Telegram notifications and
+    password-reset codes, so a leaked link must stop working quickly."""
+    __tablename__ = "telegram_link_tokens"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    customer_id = Column(String, ForeignKey("customers.id"), nullable=False)
+    token = Column(String, nullable=False, unique=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
     used = Column(Boolean, default=False)
