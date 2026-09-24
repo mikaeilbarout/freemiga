@@ -1,5 +1,7 @@
 # Secrets — never commit real credentials
 .env
+# Server backups (backup.sh) — each one contains .env and every database
+backups/
 
 # Local Python env / caches
 .venv/

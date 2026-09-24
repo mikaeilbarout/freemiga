@@ -32,16 +32,19 @@ At checkout, the customer picks between **card** and **crypto**:
 - **Crypto (USDT)** — self-hosted, not a third-party gateway. The customer
   picks one of two networks: **Tron (TRC20)** or **Polygon** — since fees on
   these two networks vary a lot depending on the wallet/app the customer
-  uses, offering both lets them pick the cheaper one. The customer sends the
-  exact plan price (in USDT) to our wallet address on that network, then
-  pastes their transaction hash on the payment page. The server
-  automatically checks the transaction on-chain (via TronGrid for Tron, or
-  the Etherscan API for Polygon) — confirming the destination is our
-  address, the amount is sufficient, and it's confirmed — and if everything
-  checks out, automatically confirms the order and provisions the VPN
-  account. Since every blockchain transaction hash is unique, it never
-  mismatches by amount alone, even if several people send the exact same
-  amount at the same time.
+  uses, offering both lets them pick the cheaper one. Each crypto order gets
+  its own exact amount — the plan price plus a small unique offset (e.g.
+  5.037 USDT for a $5 plan). The customer sends exactly that amount to our
+  wallet address on that network, then pastes their transaction hash on the
+  payment page. The server automatically checks the transaction on-chain
+  (via TronGrid for Tron, or the Etherscan API for Polygon) — confirming the
+  destination is our address, the amount is exactly this order's amount,
+  it succeeded, and it was made after the order was created — and if
+  everything checks out, automatically confirms the order and provisions
+  the VPN account. The unique amount is what ties a payment to one order:
+  our wallet address is public, so without it anyone could submit the hash
+  of someone else's payment. A transaction hash can also never be used
+  twice.
 
   Why this instead of a third-party gateway (like NowPayments)? Because
   gateways impose a minimum of roughly $11-15 for USDT on any network (even
@@ -258,23 +261,45 @@ only Telegram notifications and password recovery via this route are
 disabled (a locked-out customer can still get help via the "contact support"
 form on the login page).
 
-## Automatic database backups
+## Automatic backups
 
-Make `backup.sh` executable and add it to cron (e.g. every night at 3am):
-```bash
-chmod +x /opt/freemiga/backup.sh
-crontab -e
-```
-Add this line:
-```
-0 3 * * * /opt/freemiga/backup.sh >> /var/log/freemiga-backup.log 2>&1
-```
-Backups (`.sql.gz` files) are stored in `/opt/freemiga/backups/` and backups
-older than 30 days are automatically deleted.
+`backup.sh` backs up everything needed to rebuild the server into one file,
+`backups/backup_<timestamp>.tar.gz`:
 
-To restore a backup:
+- this site's database, uploaded files, and `.env`
+- Marzban (`/var/lib/marzban` + `/opt/marzban` — users, Xray config,
+  REALITY keys), with a consistent snapshot of its live SQLite database
+- marzban-guard's database
+
+Marzban/marzban-guard are skipped with a warning if their containers aren't
+running. Backups older than 14 days are deleted. It must run as root (it
+reads `/var/lib/marzban`). Test it once:
 ```bash
-gunzip -c backups/freemiga_20260101_030000.sql.gz | docker compose exec -T db psql -U freemiga freemiga
+sudo ./backup.sh
+```
+Then run it every night at 3am from root's crontab (use your real path to
+the repo):
+```bash
+(sudo crontab -l 2>/dev/null; echo "0 3 * * * $PWD/backup.sh >> /var/log/freemiga-backup.log 2>&1") | sudo crontab -
+```
+Optional overrides (environment variables): `BACKUP_DIR`, `KEEP_DAYS`,
+`MARZBAN_CONTAINER` (default `marzban-marzban-1`), `GUARD_DB_CONTAINER`
+(default `marzban-guard-postgres-1`).
+
+**Copy backups off the server regularly** — a backup that only lives on the
+server is lost with it. From your own computer:
+```bash
+scp user@SERVER_IP:/path/to/freemiga/backups/backup_<timestamp>.tar.gz .
+```
+Each file contains every password and key (`.env`, Marzban's keys) — keep
+it private.
+
+To restore, unpack it (`tar xzf backup_<timestamp>.tar.gz`), then:
+```bash
+# Site database
+gunzip -c <timestamp>/db.sql.gz | docker compose exec -T db psql -U freemiga freemiga
+# Marzban (then restart it)
+sudo tar xzf <timestamp>/marzban.tar.gz -C /
 ```
 
 ## Site language (Persian/English)
